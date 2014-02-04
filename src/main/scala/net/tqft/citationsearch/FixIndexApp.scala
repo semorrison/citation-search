@@ -12,7 +12,7 @@ object FixIndexApp extends App {
     set ++= ws
   }
 
-  val out = new PrintStream(new FileOutputStream("terms.new"), "UTF-8")
+  val out = new PrintStream("terms.new", "UTF-8")
   for ((t, ws) <- newIndex) {
     out.println(t)
     out.println(ws.mkString(","))
