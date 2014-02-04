@@ -16,6 +16,15 @@ object Search {
 
   val N = cites.size
 
+  def tokenize(words: String): Seq[String] = {
+    words
+      .replaceAll("\\p{P}", " ")
+      .split("[-꞉:/⁄ _]")
+      .filter(_.nonEmpty)
+      .map(org.apache.commons.lang3.StringUtils.stripAccents)
+      .map(_.toLowerCase)
+  }
+
   def idf(term: String): Option[Double] = {
     index.get(term) match {
       case None => None
@@ -32,7 +41,7 @@ object Search {
   }
 
   def query(searchString: String): Seq[(String, Double)] = {
-    val terms = searchString.split(" ").map(_.stripPrefix("(").stripSuffix(")").stripSuffix(",").stripSuffix(".").toLowerCase).iterator.filter(_.nonEmpty).map(_.toLowerCase).toList
+    val terms = tokenize(searchString)
     val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
     def score(documents: Set[Int]): Seq[(Int, Double)] = {
@@ -45,10 +54,15 @@ object Search {
       scores.toVector.sortBy({ p => -p._2 }).take(5)
     }
 
+    lazy val mr = {
+      terms.filter(_.startsWith("mr")).collect({ case MRIdentifier(k) => k }).headOption
+    }
+
     (if (idfs.isEmpty) {
       Seq.empty
+    } else if (mr.nonEmpty) {
+      Seq((mr.get, 1000.0))
     } else {
-
       val sets = idfs.iterator.map({ case (t, q) => ((t, q), index(t)) }).toStream
 
       val intersections = sets.tail.scanLeft(sets.head._2.toSet)(_ intersect _._2)
@@ -82,7 +96,25 @@ object Search {
       }
     }).map({ case (i, q) => (cites(i), q) })
   }
+}
 
- 
+object Int {
+  def unapply(s: String): Option[Int] = try {
+    Some(s.toInt)
+  } catch {
+    case _: java.lang.NumberFormatException => None
+  }
+}
 
+object MRIdentifier {
+  def unapply(s: String): Option[Int] = {
+    if (s.startsWith("mr")) {
+      s.drop(2) match {
+        case Int(id) => Some(id)
+        case _ => None
+      }
+    } else {
+      None
+    }
+  }
 }

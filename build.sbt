@@ -23,7 +23,8 @@ resolvers ++= Seq(
 libraryDependencies ++= Seq(
         "com.twitter" %% "finagle-core" % "6.1.0",
         "com.twitter" %% "finagle-http" % "6.1.0",
-        "com.github.theon" %% "scala-uri" % "0.3.4"
+        "com.github.theon" %% "scala-uri" % "0.3.4",
+	"org.apache.commons" % "commons-lang3" % "3.2.1"
 )
 
 // Test dependencies
