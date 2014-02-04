@@ -12,7 +12,7 @@ object Search {
   println("Starting up search; loading data...")
   
   def indexData = {
-    new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream()
+    new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream() 
 //    new FileInputStream("terms.gz")
   }
   
