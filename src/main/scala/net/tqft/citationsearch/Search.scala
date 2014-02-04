@@ -2,19 +2,33 @@ package net.tqft.citationsearch
 
 import scala.io.Source
 import scala.collection.mutable.ListBuffer
+import java.util.zip.GZIPInputStream
+import java.io.FileInputStream
+import java.net.URL
 
 object Search {
 
-  val index: Map[String, Set[Int]] = Source.fromFile("terms").getLines.grouped(2).map({ pair =>
+  println("Starting up search; loading data...")
+  
+  val indexData = {
+    new URL("http://citation-search.s3.amazonaws.com/terms.gz").openStream()
+//    new FileInputStream("terms.gz")
+  }
+  
+  val index: Map[String, Set[Int]] = Source.fromInputStream(new GZIPInputStream(indexData)).getLines.grouped(2).map({ pair =>
     pair(0) -> pair(1).split(",").map(_.toInt).toSet
   }).toMap
 
+  println(" .. loaded index")
+  
   val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
     require(pair(0).startsWith("MR"))
     pair(0).drop(2).toInt -> pair(1)
   }).toMap
 
-  val N = cites.size
+  println(" .. loaded cites")
+  
+  val N = 650000
 
   def tokenize(words: String): Seq[String] = {
     words
@@ -40,10 +54,12 @@ object Search {
     }
   }
 
-  def query(searchString: String): Seq[(String, Double)] = {
+  def query(searchString: String): Seq[(Int, Double)] = {
     val terms = tokenize(searchString)
     val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
+    println(idfs)
+    
     def score(documents: Set[Int]): Seq[(Int, Double)] = {
       val scores: Iterator[(Int, Double)] = (for (d <- documents.iterator) yield {
         d -> (for ((t, q) <- idfs) yield {
@@ -91,10 +107,8 @@ object Search {
         }
 
         scored.take(5).toSeq
-        //        val documents = terms.iterator.map(index).foldLeft(Set[Int]())(_ ++ _)
-        //        score(documents)
       }
-    }).map({ case (i, q) => (cites(i), q) })
+    })//.map({ case (i, q) => (cites(i), q) })
   }
 }
 
