@@ -11,7 +11,7 @@ object Search {
   println("Starting up search; loading data...")
   
   val indexData = {
-    new URL("http://citation-search.s3.amazonaws.com/terms.gz").openStream()
+    new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream()
 //    new FileInputStream("terms.gz")
   }
   
@@ -21,12 +21,12 @@ object Search {
 
   println(" .. loaded index")
   
-  val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
-    require(pair(0).startsWith("MR"))
-    pair(0).drop(2).toInt -> pair(1)
-  }).toMap
-
-  println(" .. loaded cites")
+//  val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
+//    require(pair(0).startsWith("MR"))
+//    pair(0).drop(2).toInt -> pair(1)
+//  }).toMap
+//
+//  println(" .. loaded cites")
   
   val N = 650000
 
