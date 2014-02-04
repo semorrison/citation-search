@@ -5,6 +5,7 @@ import scala.collection.mutable.ListBuffer
 import java.util.zip.GZIPInputStream
 import java.io.FileInputStream
 import java.net.URL
+import scala.io.Codec
 
 object Search {
 
@@ -15,9 +16,9 @@ object Search {
 //    new FileInputStream("terms.gz")
   }
   
-  for(l <- Source.fromInputStream(new GZIPInputStream(indexData)).getLines.take(20)) { println(l) }
+  for(l <- Source.fromInputStream(new GZIPInputStream(indexData))(Codec.UTF8).getLines.take(20)) { println(l) }
   
-  val index: Map[String, Set[Int]] = Source.fromInputStream(new GZIPInputStream(indexData)).getLines.grouped(2).map({ pair =>
+  val index: Map[String, Set[Int]] = Source.fromInputStream(new GZIPInputStream(indexData))(Codec.UTF8).getLines.grouped(2).map({ pair =>
     pair(0) -> pair(1).split(",").map(_.toInt).toSet
   }).toMap
 
