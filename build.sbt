@@ -10,8 +10,6 @@ version := "0.1"
 
 scalaVersion := "2.10.3"
 
-scalacOptions += "-target:jvm-1.7"
-
 resolvers ++= Seq(
 	"Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
 	"Sonatype Nexus Releases" at "https://oss.sonatype.org/content/repositories/releases",
