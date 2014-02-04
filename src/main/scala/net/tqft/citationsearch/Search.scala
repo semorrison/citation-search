@@ -12,8 +12,8 @@ object Search {
   println("Starting up search; loading data...")
   
   def indexData = {
-    new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream() 
-//    new FileInputStream("terms.gz")
+//    new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream() 
+    new FileInputStream("terms.gz")
   }
   
   val index: Map[String, Set[Int]] = Source.fromInputStream(new GZIPInputStream(indexData))(Codec.UTF8).getLines.grouped(2).map({ pair =>
