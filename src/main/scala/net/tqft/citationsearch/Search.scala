@@ -2,19 +2,43 @@ package net.tqft.citationsearch
 
 import scala.io.Source
 import scala.collection.mutable.ListBuffer
+import java.util.zip.GZIPInputStream
+import java.io.FileInputStream
+import java.net.URL
+import scala.io.Codec
 
 object Search {
 
-  val index: Map[String, Set[Int]] = Source.fromFile("terms").getLines.grouped(2).map({ pair =>
+  println("Starting up search; loading data...")
+  
+  def indexData = {
+//    new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream() 
+    new FileInputStream("terms.gz")
+  }
+  
+  val index: Map[String, Set[Int]] = Source.fromInputStream(new GZIPInputStream(indexData))(Codec.UTF8).getLines.grouped(2).map({ pair =>
     pair(0) -> pair(1).split(",").map(_.toInt).toSet
   }).toMap
 
-  val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
-    require(pair(0).startsWith("MR"))
-    pair(0).drop(2).toInt -> pair(1)
-  }).toMap
+  println(" .. loaded index")
+  
+//  val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
+//    require(pair(0).startsWith("MR"))
+//    pair(0).drop(2).toInt -> pair(1)
+//  }).toMap
+//
+//  println(" .. loaded cites")
+  
+  val N = 650000
 
-  val N = cites.size
+  def tokenize(words: String): Seq[String] = {
+    words
+      .replaceAll("\\p{P}", " ")
+      .split("[-꞉:/⁄ _]")
+      .filter(_.nonEmpty)
+      .map(org.apache.commons.lang3.StringUtils.stripAccents)
+      .map(_.toLowerCase)
+  }
 
   def idf(term: String): Option[Double] = {
     index.get(term) match {
@@ -31,10 +55,12 @@ object Search {
     }
   }
 
-  def query(searchString: String): Seq[(String, Double)] = {
-    val terms = searchString.split(" ").map(_.stripPrefix("(").stripSuffix(")").stripSuffix(",").stripSuffix(".").toLowerCase).iterator.filter(_.nonEmpty).map(_.toLowerCase).toList
+  def query(searchString: String): Seq[(Int, Double)] = {
+    val terms = tokenize(searchString)
     val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
+    println(idfs)
+    
     def score(documents: Set[Int]): Seq[(Int, Double)] = {
       val scores: Iterator[(Int, Double)] = (for (d <- documents.iterator) yield {
         d -> (for ((t, q) <- idfs) yield {
@@ -45,10 +71,15 @@ object Search {
       scores.toVector.sortBy({ p => -p._2 }).take(5)
     }
 
+    lazy val mr = {
+      terms.filter(_.startsWith("mr")).collect({ case MRIdentifier(k) => k }).headOption
+    }
+
     (if (idfs.isEmpty) {
       Seq.empty
+    } else if (mr.nonEmpty) {
+      Seq((mr.get, 1000.0))
     } else {
-
       val sets = idfs.iterator.map({ case (t, q) => ((t, q), index(t)) }).toStream
 
       val intersections = sets.tail.scanLeft(sets.head._2.toSet)(_ intersect _._2)
@@ -77,12 +108,28 @@ object Search {
         }
 
         scored.take(5).toSeq
-        //        val documents = terms.iterator.map(index).foldLeft(Set[Int]())(_ ++ _)
-        //        score(documents)
       }
-    }).map({ case (i, q) => (cites(i), q) })
+    })//.map({ case (i, q) => (cites(i), q) })
   }
+}
 
- 
+object Int {
+  def unapply(s: String): Option[Int] = try {
+    Some(s.toInt)
+  } catch {
+    case _: java.lang.NumberFormatException => None
+  }
+}
 
+object MRIdentifier {
+  def unapply(s: String): Option[Int] = {
+    if (s.startsWith("mr")) {
+      s.drop(2) match {
+        case Int(id) => Some(id)
+        case _ => None
+      }
+    } else {
+      None
+    }
+  }
 }
