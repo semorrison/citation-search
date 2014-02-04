@@ -10,10 +10,12 @@ object Search {
 
   println("Starting up search; loading data...")
   
-  val indexData = {
+  def indexData = {
     new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream()
 //    new FileInputStream("terms.gz")
   }
+  
+  for(l <- Source.fromInputStream(new GZIPInputStream(indexData)).getLines.take(20)) { println(l) }
   
   val index: Map[String, Set[Int]] = Source.fromInputStream(new GZIPInputStream(indexData)).getLines.grouped(2).map({ pair =>
     pair(0) -> pair(1).split(",").map(_.toInt).toSet
