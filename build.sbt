@@ -1,3 +1,7 @@
+import com.typesafe.startscript.StartScriptPlugin
+
+seq(StartScriptPlugin.startScriptForClassesSettings: _*)
+
 name := "citation-search"
 
 organization := "net.tqft"
