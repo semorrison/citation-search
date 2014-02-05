@@ -94,7 +94,7 @@ object Search {
       .build(loader)
   }
 
-  case class Citation(MRNumber: Int, title: String, authors: String, cite: String)
+  case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: Option[String])
 
   val citationStore = db.getHashMap[Int, Citation]("articles")
 
@@ -105,8 +105,8 @@ object Search {
           import scala.collection.JavaConverters._
           val result = citationStore.asScala.getOrElseUpdate(identifier,
             SQL { implicit session =>
-              (for (a <- TableQuery[MathscinetAux]; if a.MRNumber === identifier) yield (a.wikiTitle, a.textAuthors, a.textCitation)).list.headOption match {
-                case Some((t, a, c)) => Citation(identifier, t, a, c)
+              (for ((a, aux) <- TableQuery[MathscinetBIBTEX] innerJoin TableQuery[MathscinetAux] on (_.MRNumber === _.MRNumber); if a.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation)).list.headOption match {
+                case Some((url, doi, t, a, c)) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url))
               }
             })
           db.commit
@@ -127,11 +127,11 @@ object Search {
           }
 
           for (
-            (identifier, t, a, c) <- SQL { implicit session =>
-              (for (a <- TableQuery[MathscinetAux]; if a.MRNumber.inSet(toLookup)) yield (a.MRNumber, a.wikiTitle, a.textAuthors, a.textCitation)).list
+            (identifier, url, doi, t, a, c) <- SQL { implicit session =>
+              (for ((a, aux) <- TableQuery[MathscinetBIBTEX] innerJoin TableQuery[MathscinetAux] on (_.MRNumber === _.MRNumber); if a.MRNumber.inSet(toLookup)) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation)).list
             }
           ) {
-            val cite = Citation(identifier, t, a, c)
+            val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url))
             result(identifier) = cite
             citationStore.put(identifier, cite)
           }
@@ -341,6 +341,34 @@ class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String
   def textCitation = column[String]("textCitation")
   def * = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation)
 }
+
+class MathscinetBIBTEX(tag: Tag) extends Table[(Int, String, Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String])](tag, "mathscinet_bibtex") {
+  def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
+  def `type` = column[String]("type")
+  def title = column[Option[String]]("title")
+  def booktitle = column[Option[String]]("booktitle")
+  def author = column[Option[String]]("author")
+  def editor = column[Option[String]]("editor")
+  def doi = column[Option[String]]("doi")
+  def url = column[Option[String]]("url")
+  def journal = column[Option[String]]("journal")
+  def fjournal = column[Option[String]]("fjournal")
+  def issn = column[Option[String]]("issn")
+  def isbn = column[Option[String]]("isbn")
+  def volume = column[Option[String]]("volume")
+  def issue = column[Option[String]]("issue")
+  def year = column[Option[String]]("year")
+  def pages = column[Option[String]]("pages")
+  def mrclass = column[Option[String]]("mrclass")
+  def number = column[Option[String]]("number")
+  def address = column[Option[String]]("address")
+  def edition = column[Option[String]]("edition")
+  def publisher = column[Option[String]]("publisher")
+  def series = column[Option[String]]("series")
+  def * = (MRNumber, `type`, title, booktitle, author, editor, doi, url, journal, fjournal, issn, isbn, volume, issue, year, pages, mrclass, number, address, edition, publisher, series)
+
+}
+
 
 object Int {
   def unapply(s: String): Option[Int] = try {
