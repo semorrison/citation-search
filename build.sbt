@@ -17,7 +17,6 @@ resolvers ++= Seq(
 	"Sonatype Nexus Releases" at "https://oss.sonatype.org/content/repositories/releases",
 	"Scala Snapshots" at "http://scala-tools.org/repo-snapshots/",
         "twitter-repo" at "http://maven.twttr.com",
-        "tqft.net Maven repository" at "http://tqft.net/releases",
         "simmetrics repository" at "http://maven.mse.jhu.edu/m2repository"
 )
 
@@ -28,7 +27,9 @@ libraryDependencies ++= Seq(
         "com.github.theon" %% "scala-uri" % "0.3.4",
 	"org.apache.commons" % "commons-lang3" % "3.2.1",
 	"com.google.guava" % "guava" % "16.0.1",
-	"net.tqft" %% "arxiv-toolkit" % "0.1.1-SNAPSHOT",
+	"com.google.code.findbugs" % "jsr305" % "2.0.2",
+        "mysql" % "mysql-connector-java" % "5.1.24",
+        "com.typesafe.slick" %% "slick" % "2.0.0-RC1",
 	"org.mapdb" % "mapdb" % "0.9.9"
 )
 

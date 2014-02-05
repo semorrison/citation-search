@@ -10,9 +10,9 @@ import java.io.File
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
 import java.util.concurrent.TimeUnit
-import net.tqft.mathscinet.Article
 import com.google.common.cache.LoadingCache
-import net.tqft.util.pandoc
+import scala.slick.driver.MySQLDriver.simple._
+import scala.collection.JavaConverters._
 
 object Search {
 
@@ -32,8 +32,6 @@ object Search {
 
   val db = DBMaker.newFileDB(new File("db"))
     .closeOnJvmShutdown
-    //    .asyncWriteEnable
-    //    .mmapFileEnableIfSupported
     .make
 
   val store = db.getHashMap[String, Array[Int]]("terms")
@@ -65,7 +63,7 @@ object Search {
 
     CacheBuilder.newBuilder()
       .maximumSize(20000)
-      .expireAfterAccess(2, TimeUnit.MINUTES)
+      .expireAfterAccess(5, TimeUnit.MINUTES)
       .build(loader)
   }
 
@@ -92,37 +90,64 @@ object Search {
 
     CacheBuilder.newBuilder()
       .maximumSize(20000)
-      .expireAfterAccess(2, TimeUnit.MINUTES)
+      .expireAfterAccess(5, TimeUnit.MINUTES)
       .build(loader)
   }
 
-  case class Citation(title: String, authors: String, cite: String)
+  case class Citation(MRNumber: Int, title: String, authors: String, cite: String)
+
+  val citationStore = db.getHashMap[Int, Citation]("articles")
 
   val citationCache: LoadingCache[Int, Citation] = {
     val loader =
       new CacheLoader[Int, Citation]() {
         override def load(identifier: Int) = {
-          val a = Article(identifier)
-          Citation(a.sanitizedTitle,
-            a.authors.map(a => pandoc.latexToText(a.name)).mkString(" and "),
-            pandoc.latexToText(a.citation))
+          import scala.collection.JavaConverters._
+          val result = citationStore.asScala.getOrElseUpdate(identifier,
+            SQL { implicit session =>
+              (for (a <- TableQuery[MathscinetAux]; if a.MRNumber === identifier) yield (a.wikiTitle, a.textAuthors, a.textCitation)).list.headOption match {
+                case Some((t, a, c)) => Citation(identifier, t, a, c)
+              }
+            })
+          db.commit
+          result
+        }
+        override def loadAll(identifiers: java.lang.Iterable[_ <: Int]): java.util.Map[Int, Citation] = {
+          val result = scala.collection.mutable.Map[Int, Citation]()
+          val toLookup = scala.collection.mutable.ListBuffer[Int]()
+          for (identifier <- identifiers.asScala) {
+            citationStore.asScala.get(identifier) match {
+              case Some(cite) => {
+                result(identifier) = cite
+              }
+              case None => {
+                toLookup += identifier
+              }
+            }
+          }
+
+          for (
+            (identifier, t, a, c) <- SQL { implicit session =>
+              (for (a <- TableQuery[MathscinetAux]; if a.MRNumber.inSet(toLookup)) yield (a.MRNumber, a.wikiTitle, a.textAuthors, a.textCitation)).list
+            }
+          ) {
+            val cite = Citation(identifier, t, a, c)
+            result(identifier) = cite
+            citationStore.put(identifier, cite)
+          }
+          db.commit
+
+          result.asJava
         }
       }
 
     CacheBuilder.newBuilder()
-      .maximumSize(200)
-      .expireAfterAccess(2, TimeUnit.MINUTES)
+      .maximumSize(2000)
+      .expireAfterAccess(5, TimeUnit.MINUTES)
       .build(loader).asInstanceOf[LoadingCache[Int, Citation]]
   }
 
-  //  val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
-  //    require(pair(0).startsWith("MR"))
-  //    pair(0).drop(2).toInt -> pair(1)
-  //  }).toMap
-  //
-  //  println(" .. loaded cites")
-
-  val N = 650000
+  val N = 656000
 
   def tokenize(words: String): Seq[String] = {
     words
@@ -134,8 +159,10 @@ object Search {
   }
 
   def query(searchString: String): Seq[(Citation, Double)] = {
+    println(searchString)
+
     val terms = tokenize(searchString).distinct
-    val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
+    lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
     println(idfs)
 
@@ -153,10 +180,12 @@ object Search {
       terms.filter(_.startsWith("mr")).collect({ case MRIdentifier(k) => k }).headOption
     }
 
-    val ids = (if (idfs.isEmpty) {
+    val ids = (if (terms.isEmpty) {
       Seq.empty
     } else if (mr.nonEmpty) {
       Seq((mr.get, 1000.0))
+    } else if (idfs.isEmpty) {
+      Seq.empty
     } else {
       val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t)) }).toStream
 
@@ -189,7 +218,12 @@ object Search {
       }
     })
 
-    ids.map({ case (i, q) => (citationCache(i), q) })
+    val citations = citationCache.getAll(ids.map(_._1).asJava)
+    val results = ids.map({ case (i, q) => (citations.get(i), q) })
+
+    for (r <- results) println(r)
+
+    results
 
   }
 
@@ -293,6 +327,19 @@ object Search {
     }
   }
 
+}
+
+object SQL {
+  def apply[A](closure: slick.driver.MySQLDriver.backend.Session => A): A = Database.forURL("jdbc:mysql://mysql.tqft.net/mathematicsliteratureproject?user=readonly1&password=readonly", driver = "com.mysql.jdbc.Driver") withSession closure
+}
+
+class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String)](tag, "mathscinet_aux") {
+  def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
+  def textTitle = column[String]("textTitle")
+  def wikiTitle = column[String]("wikiTitle")
+  def textAuthors = column[String]("textAuthors")
+  def textCitation = column[String]("textCitation")
+  def * = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation)
 }
 
 object Int {
