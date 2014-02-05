@@ -1,7 +1,23 @@
 <html>
 <head>
-<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
- <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+	<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config(
+                           {
+                           "HTML-CSS": { preferredFont: "TeX", availableFonts: ["STIX","TeX"] },
+                           tex2jax: {
+                           inlineMath: [ ["$", "$"], ["\\\\(","\\\\)"] ],
+                           displayMath: [ ["$$","$$"], ["\\[", "\\]"] ],
+                           processEscapes: true,
+                           ignoreClass: "tex2jax_ignore|dno"
+                           },
+                           TeX: {
+                           noUndefined: { attributes: { mathcolor: "red", mathbackground: "#FFEEEE", mathsize: "90%" } }
+                           },
+                           messageStyle: "none"
+                           });
+        </script>    
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
 </head>
 <body>
 Search the mathematics literature:<br/>
@@ -24,11 +40,13 @@ $("#query").keyup(function () {
        	$.getJSON("http://polar-dawn-1849.herokuapp.com/?callback=?&q=" + query, function(response) {
        	if($("#query").val() == query) {
 	       	var html = '<ol>\n';
+	       	alert(response.results[2].title);
 	       	for (var i = 0; i < response.results.length; i++) {
 	       		html += '<li>' + '<a href="' + response.results[i].url + '">' + response.results[i].title + '</a> - ' + response.results[i].authors + ' - ' + response.results[i].cite /* + " (" + response.results[i].score + ")" */ + '</li>';
 	       	}
 	       	$("#results").empty();
 	       	$("#results").append(html);
+	       //	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
 	       	$("#spinner").hide();
        }
        })

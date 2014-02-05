@@ -218,8 +218,8 @@ object Search {
       }
     })
 
-    val citations = citationCache.getAll(ids.map(_._1).asJava)
-    val results = ids.map({ case (i, q) => (citations.get(i), q) })
+    val citations = citationCache.getAll(ids.map(_._1).asJava).asScala
+    val results = ids.map({ case (i, q) => (citations.get(i), q) }).collect({ case (Some(c), q) => (c, q) })
 
     for (r <- results) println(r)
 
