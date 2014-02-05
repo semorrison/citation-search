@@ -10,6 +10,9 @@ import java.io.File
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
 import java.util.concurrent.TimeUnit
+import net.tqft.mathscinet.Article
+import com.google.common.cache.LoadingCache
+import net.tqft.util.pandoc
 
 object Search {
 
@@ -93,6 +96,25 @@ object Search {
       .build(loader)
   }
 
+  case class Citation(title: String, authors: String, cite: String)
+
+  val citationCache: LoadingCache[Int, Citation] = {
+    val loader =
+      new CacheLoader[Int, Citation]() {
+        override def load(identifier: Int) = {
+          val a = Article(identifier)
+          Citation(a.sanitizedTitle,
+            a.authors.map(a => pandoc.latexToText(a.name)).mkString(" and "),
+            pandoc.latexToText(a.citation))
+        }
+      }
+
+    CacheBuilder.newBuilder()
+      .maximumSize(200)
+      .expireAfterAccess(2, TimeUnit.MINUTES)
+      .build(loader).asInstanceOf[LoadingCache[Int, Citation]]
+  }
+
   //  val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
   //    require(pair(0).startsWith("MR"))
   //    pair(0).drop(2).toInt -> pair(1)
@@ -111,7 +133,7 @@ object Search {
       .map(_.toLowerCase)
   }
 
-  def query(searchString: String): Seq[(Int, Double)] = {
+  def query(searchString: String): Seq[(Citation, Double)] = {
     val terms = tokenize(searchString)
     val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
@@ -131,7 +153,7 @@ object Search {
       terms.filter(_.startsWith("mr")).collect({ case MRIdentifier(k) => k }).headOption
     }
 
-    (if (idfs.isEmpty) {
+    val ids = (if (idfs.isEmpty) {
       Seq.empty
     } else if (mr.nonEmpty) {
       Seq((mr.get, 1000.0))
@@ -165,7 +187,9 @@ object Search {
 
         scored.take(5).toSeq
       }
-    }) //.map({ case (i, q) => (cites(i), q) }))
+    })
+
+    ids.map({ case (i, q) => (citationCache(i), q) })
 
   }
 
