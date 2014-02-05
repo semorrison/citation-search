@@ -24,6 +24,8 @@ object Web {
 }
 
 class ResolverService extends Service[HttpRequest, HttpResponse] {
+  Search.query("warming up ...")
+  
   def apply(req: HttpRequest): Future[HttpResponse] = {
     val response = Response()
 
