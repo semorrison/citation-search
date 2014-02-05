@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit
 import com.google.common.cache.LoadingCache
 import scala.slick.driver.MySQLDriver.simple._
 import scala.collection.JavaConverters._
+import scala.concurrent.future
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object Search {
 
@@ -109,7 +111,7 @@ object Search {
                 case Some((t, a, c)) => Citation(identifier, t, a, c)
               }
             })
-          db.commit
+          future { db.commit }
           result
         }
         override def loadAll(identifiers: java.lang.Iterable[_ <: Int]): java.util.Map[Int, Citation] = {
@@ -126,16 +128,25 @@ object Search {
             }
           }
 
+          val records = SQL { implicit session =>
+            (for (a <- TableQuery[MathscinetAux]; if a.MRNumber.inSet(toLookup)) yield (a.MRNumber, a.wikiTitle, a.textAuthors, a.textCitation)).list
+          }
+
           for (
-            (identifier, t, a, c) <- SQL { implicit session =>
-              (for (a <- TableQuery[MathscinetAux]; if a.MRNumber.inSet(toLookup)) yield (a.MRNumber, a.wikiTitle, a.textAuthors, a.textCitation)).list
-            }
+            (identifier, t, a, c) <- records
           ) {
             val cite = Citation(identifier, t, a, c)
             result(identifier) = cite
-            citationStore.put(identifier, cite)
           }
-          db.commit
+          future {
+            for (
+              (identifier, t, a, c) <- records
+            ) {
+              val cite = Citation(identifier, t, a, c)
+              citationStore.put(identifier, cite)
+            }
+            db.commit
+          }
 
           result.asJava
         }
