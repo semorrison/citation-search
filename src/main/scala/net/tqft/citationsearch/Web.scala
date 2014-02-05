@@ -23,10 +23,10 @@ object Web {
       .build(new ResolverService)
     println("Started.")
     
-    Future(while(true) {
-      println("ping: " + Source.fromURL("http://polar-dawn-1849.herokuapp.com/q=ping").getLines.nonEmpty)
-      Thread.sleep(50 * 60 * 1000)
-    })
+//    Future(while(true) {
+//      println("ping: " + Source.fromURL("http://polar-dawn-1849.herokuapp.com/q=ping").getLines.nonEmpty)
+//      Thread.sleep(50 * 60 * 1000)
+//    })
   }
 }
 
