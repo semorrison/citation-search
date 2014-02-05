@@ -146,7 +146,7 @@ object Search {
         }).sum
       })
 
-      scores.seq.sortBy({ p => -p._2 }).take(5)
+      scores.seq.sortBy({ p => (-p._2, p._1) }).take(5)
     }
 
     lazy val mr = {
@@ -181,7 +181,7 @@ object Search {
         var k = 0
         while (k < idfs.size && (scored.size < 2 || (scored(0)._2 - scored(1)._2 < tailQSums(k)))) {
           scored ++= score(diff(k))
-          scored = scored.sortBy(p => -p._2)
+          scored = scored.sortBy(p => (-p._2, p._1))
           k += 1
         }
 
