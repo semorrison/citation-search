@@ -14,7 +14,8 @@ resolvers ++= Seq(
 	"Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
 	"Sonatype Nexus Releases" at "https://oss.sonatype.org/content/repositories/releases",
 	"Scala Snapshots" at "http://scala-tools.org/repo-snapshots/",
-        "twitter-repo" at "http://maven.twttr.com"
+        "twitter-repo" at "http://maven.twttr.com",
+        "tqft.net Maven repository" at "http://tqft.net/releases"
 )
 
 // Project dependencies
@@ -22,7 +23,10 @@ libraryDependencies ++= Seq(
         "com.twitter" %% "finagle-core" % "6.1.0",
         "com.twitter" %% "finagle-http" % "6.1.0",
         "com.github.theon" %% "scala-uri" % "0.3.4",
-	"org.apache.commons" % "commons-lang3" % "3.2.1"
+	"org.apache.commons" % "commons-lang3" % "3.2.1",
+	"com.google.guava" % "guava" % "16.0.1",
+	"net.tqft" %% "arxiv-toolkit" % "0.1.1-SNAPSHOT",
+	"org.mapdb" % "mapdb" % "0.9.9"
 )
 
 // Test dependencies

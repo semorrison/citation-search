@@ -6,29 +6,100 @@ import java.util.zip.GZIPInputStream
 import java.io.FileInputStream
 import java.net.URL
 import scala.io.Codec
+import java.io.File
+import com.google.common.cache.CacheBuilder
+import com.google.common.cache.CacheLoader
+import java.util.concurrent.TimeUnit
 
 object Search {
 
-  println("Starting up search; loading data...")
-  
-  def indexData = {
-//    new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream() 
-    new FileInputStream("terms.gz")
-  }
-  
-  val index: Map[String, Set[Int]] = Source.fromInputStream(new GZIPInputStream(indexData))(Codec.UTF8).getLines.grouped(2).map({ pair =>
-    pair(0) -> pair(1).split(",").map(_.toInt).toSet
-  }).toMap
+  import org.mapdb._
 
-  println(" .. loaded index")
-  
-//  val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
-//    require(pair(0).startsWith("MR"))
-//    pair(0).drop(2).toInt -> pair(1)
-//  }).toMap
-//
-//  println(" .. loaded cites")
-  
+  def indexLines = {
+    val file = new File("terms.gz")
+    val stream = if (file.exists) {
+      println(" ... from local file")
+      new FileInputStream(file)
+    } else {
+      println(" ... from S3")
+      new URL("https://s3.amazonaws.com/citation-search/terms.gz").openStream()
+    }
+    Source.fromInputStream(new GZIPInputStream(stream))(Codec.UTF8).getLines
+  }
+
+  val db = DBMaker.newFileDB(new File("db"))
+    .closeOnJvmShutdown
+    //    .asyncWriteEnable
+    //    .mmapFileEnableIfSupported
+    .make
+
+  val store = db.getHashMap[String, Array[Int]]("terms")
+
+  if (store.isEmpty) {
+    println("Starting up search; loading data...")
+    var count = 0
+    for (pair <- indexLines.grouped(2)) {
+      count += 1
+      if (count % 1000 == 0) { println(s"Loaded $count terms"); db.commit }
+      store.put(pair(0), pair(1).split(",").map(_.toInt))
+    }
+    db.commit
+    println(" .. loaded index")
+  }
+
+  val index = {
+    import scala.collection.JavaConverters._
+    store.asScala
+  }
+
+  val cachedIndex = {
+    val loader =
+      new CacheLoader[String, Option[Array[Int]]]() {
+        override def load(key: String) = {
+          index.get(key)
+        }
+      }
+
+    CacheBuilder.newBuilder()
+      .maximumSize(20000)
+      .expireAfterAccess(2, TimeUnit.MINUTES)
+      .build(loader)
+  }
+
+  def get(t: String) = cachedIndex.getUnchecked(t).get
+
+  val idf = {
+    val loader =
+      new CacheLoader[String, Option[Double]]() {
+        override def load(term: String) = {
+          cachedIndex.getUnchecked(term) match {
+            case None => None
+            case Some(documents) => {
+              val n = documents.length
+              val r = scala.math.log((N - n + 0.5) / (n + 0.5))
+              if (r < 0) {
+                None
+              } else {
+                Some(r)
+              }
+            }
+          }
+        }
+      }
+
+    CacheBuilder.newBuilder()
+      .maximumSize(20000)
+      .expireAfterAccess(2, TimeUnit.MINUTES)
+      .build(loader)
+  }
+
+  //  val cites: Map[Int, String] = Source.fromFile("cites").getLines.grouped(2).map({ pair =>
+  //    require(pair(0).startsWith("MR"))
+  //    pair(0).drop(2).toInt -> pair(1)
+  //  }).toMap
+  //
+  //  println(" .. loaded cites")
+
   val N = 650000
 
   def tokenize(words: String): Seq[String] = {
@@ -40,35 +111,20 @@ object Search {
       .map(_.toLowerCase)
   }
 
-  def idf(term: String): Option[Double] = {
-    index.get(term) match {
-      case None => None
-      case Some(documents) => {
-        val n = documents.size
-        val r = scala.math.log((N - n + 0.5) / (n + 0.5))
-        if (r < 0) {
-          None
-        } else {
-          Some(r)
-        }
-      }
-    }
-  }
-
   def query(searchString: String): Seq[(Int, Double)] = {
     val terms = tokenize(searchString)
     val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
     println(idfs)
-    
-    def score(documents: Set[Int]): Seq[(Int, Double)] = {
-      val scores: Iterator[(Int, Double)] = (for (d <- documents.iterator) yield {
+
+    def score(documents: Array[Int]) = {
+      val scores = (for (d <- documents) yield {
         d -> (for ((t, q) <- idfs) yield {
-          if (index(t).contains(d)) q else 0.0
+          if (get(t).has(d)) q else 0.0
         }).sum
       })
 
-      scores.toVector.sortBy({ p => -p._2 }).take(5)
+      scores.seq.sortBy({ p => -p._2 }).take(5)
     }
 
     lazy val mr = {
@@ -80,9 +136,9 @@ object Search {
     } else if (mr.nonEmpty) {
       Seq((mr.get, 1000.0))
     } else {
-      val sets = idfs.iterator.map({ case (t, q) => ((t, q), index(t)) }).toStream
+      val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t)) }).toStream
 
-      val intersections = sets.tail.scanLeft(sets.head._2.toSet)(_ intersect _._2)
+      val intersections = sets.tail.scanLeft(sets.head._2)(_ intersect _._2)
       val j = intersections.indexWhere(_.isEmpty) match {
         case -1 => intersections.size
         case j => j
@@ -95,7 +151,7 @@ object Search {
       } else {
 
         // start scoring the unions, until we have a winner
-        val unions = sets.scanLeft(Set[Int]())(_ union _._2)
+        val unions = sets.scanLeft(Array.empty[Int])(_ union _._2)
         val diff = sets.map(_._2).zip(unions).map(p => p._1 diff p._2)
         var scored = scala.collection.mutable.Buffer[(Int, Double)]()
 
@@ -109,8 +165,110 @@ object Search {
 
         scored.take(5).toSeq
       }
-    })//.map({ case (i, q) => (cites(i), q) })
+    }) //.map({ case (i, q) => (cites(i), q) }))
+
   }
+
+  implicit class SetArray(array: Array[Int]) {
+    def has(x: Int): Boolean = {
+      var a = 0
+      var b = array.length
+      while (b > a + 1) {
+        val m = (b + a) / 2
+        val am = array(m)
+        if (am > x) {
+          b = m
+        } else if (am < x) {
+          a = m
+        } else {
+          a = m
+          b = m
+        }
+      }
+      array(a) == x
+    }
+    def intersect(other: Array[Int]): Array[Int] = {
+      var i = 0
+      var j = 0
+      var k = 0
+      val result = new Array[Int](scala.math.min(array.length, other.length))
+      while (i < array.length && j < other.length) {
+        val ai = array(i)
+        val aj = other(j)
+        if (ai < aj) {
+          i += 1
+        } else if (ai > aj) {
+          j += 1
+        } else {
+          result(k) = ai
+          i += 1
+          j += 1
+          k += 1
+        }
+      }
+      result.take(k)
+    }
+    def union(other: Array[Int]): Array[Int] = {
+      var i = 0
+      var j = 0
+      var k = 0
+      val result = new Array[Int](array.length + other.length)
+      while (i < array.length && j < other.length) {
+        val ai = array(i)
+        val aj = other(j)
+        if (ai < aj) {
+          result(k) = ai
+          i += 1
+        } else if (ai > aj) {
+          result(k) = aj
+          j += 1
+        } else {
+          result(k) = ai
+          i += 1
+          j += 1
+        }
+        k += 1
+      }
+      while (i < array.length) {
+        result(k) = array(i)
+        i += 1
+        k += 1
+      }
+      while (j < other.length) {
+        result(k) = other(j)
+        j += 1
+        k += 1
+      }
+      result.take(k)
+    }
+    def diff(other: Array[Int]): Array[Int] = {
+      var i = 0
+      var j = 0
+      var k = 0
+      val result = new Array[Int](array.length)
+      while (i < array.length && j < other.length) {
+        val ai = array(i)
+        val aj = other(j)
+        if (ai < aj) {
+          result(k) = ai
+          i += 1
+          k += 1
+        } else if (ai > aj) {
+          j += 1
+        } else {
+          i += 1
+          j += 1
+        }
+      }
+      while (i < array.length) {
+        result(k) = array(i)
+        i += 1
+        k += 1
+      }
+      result.take(k)
+    }
+  }
+
 }
 
 object Int {

@@ -15,6 +15,6 @@ object FixIndexApp extends App {
   val out = new PrintStream("terms.new", "UTF-8")
   for ((t, ws) <- newIndex) {
     out.println(t)
-    out.println(ws.mkString(","))
+    out.println(ws.toSeq.sorted.mkString(","))
   }
 }
