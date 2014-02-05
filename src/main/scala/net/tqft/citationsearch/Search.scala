@@ -105,7 +105,7 @@ object Search {
           import scala.collection.JavaConverters._
           val result = citationStore.asScala.getOrElseUpdate(identifier,
             SQL { implicit session =>
-              (for ((a, aux) <- TableQuery[MathscinetBIBTEX] innerJoin TableQuery[MathscinetAux] on (_.MRNumber === _.MRNumber); if a.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation)).list.headOption match {
+              (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation)).firstOption match {
                 case Some((url, doi, t, a, c)) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url))
               }
             })
@@ -128,7 +128,9 @@ object Search {
 
           for (
             (identifier, url, doi, t, a, c) <- SQL { implicit session =>
-              (for ((a, aux) <- TableQuery[MathscinetBIBTEX] innerJoin TableQuery[MathscinetAux] on (_.MRNumber === _.MRNumber); if a.MRNumber.inSet(toLookup)) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation)).list
+              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation))
+              println(sql.selectStatement)
+              sql.list
             }
           ) {
             val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url))
