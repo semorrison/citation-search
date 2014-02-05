@@ -23,15 +23,15 @@ object Web {
       .build(new ResolverService)
     println("Started.")
     
-//    Future(while(true) {
-//      println("ping: " + Source.fromURL("http://polar-dawn-1849.herokuapp.com/q=ping").getLines.nonEmpty)
-//      Thread.sleep(50 * 60 * 1000)
-//    })
+    Future(while(true) {
+      println("ping: " + Source.fromURL("http://polar-dawn-1849.herokuapp.com/q=ping").getLines.nonEmpty)
+      Thread.sleep(50 * 60 * 1000)
+    })
   }
 }
 
 class ResolverService extends Service[HttpRequest, HttpResponse] {
-  Future(Search.query("warming up ..."))
+//  Future(Search.query("warming up ..."))
   
   def apply(req: HttpRequest): Future[HttpResponse] = {
     val response = Response()
