@@ -3,6 +3,10 @@
 .project
 .settings
 
+db
+db.p
+terms.gz
+
 bin
 *.class
 *.log
