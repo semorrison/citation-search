@@ -9,6 +9,8 @@ import java.net.InetSocketAddress
 import util.Properties
 import java.net.URI
 import org.jboss.netty.handler.codec.http.QueryStringDecoder
+import scala.concurrent._
+import ExecutionContext.Implicits.global
 
 object Web {
   def main(args: Array[String]) {
@@ -24,7 +26,7 @@ object Web {
 }
 
 class ResolverService extends Service[HttpRequest, HttpResponse] {
-  Search.query("warming up ...")
+  future { Search.query("warming up ...") }
   
   def apply(req: HttpRequest): Future[HttpResponse] = {
     val response = Response()

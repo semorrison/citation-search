@@ -134,7 +134,7 @@ object Search {
   }
 
   def query(searchString: String): Seq[(Citation, Double)] = {
-    val terms = tokenize(searchString)
+    val terms = tokenize(searchString).distinct
     val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
     println(idfs)
