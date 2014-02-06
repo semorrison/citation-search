@@ -96,7 +96,7 @@ object Search {
       .build(loader)
   }
 
-  case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String)
+  case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String])
 
   val citationStore = db.getHashMap[Int, Option[Citation]]("articles").asScala
 
@@ -107,8 +107,8 @@ object Search {
           import scala.collection.JavaConverters._
           val result = citationStore.getOrElseUpdate(identifier,
             SQL { implicit session =>
-              (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation)).firstOption.map {
-                case (url, doi, t, a, c) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier))
+              (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf)).firstOption.map {
+                case (url, doi, t, a, c, pdf) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf })
               }
             })
           future { db.commit }
@@ -129,22 +129,22 @@ object Search {
           }
 
           val records = SQL { implicit session =>
-            val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation))
+            val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf))
             //              println(sql.selectStatement)
             sql.list
           }
 
           for (
-            (identifier, url, doi, t, a, c) <- records
+            (identifier, url, doi, t, a, c, pdf) <- records
           ) {
-            val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier))
+            val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf })
             result(identifier) = Some(cite)
           }
           future {
             for (
-              (identifier, url, doi, t, a, c) <- records
+              (identifier, url, doi, t, a, c,pdf) <- records
             ) {
-              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier))
+              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf })
               citationStore.put(identifier, Some(cite))
             }
             db.commit
@@ -371,13 +371,15 @@ object SQL {
   def apply[A](closure: slick.driver.MySQLDriver.backend.Session => A): A = Database.forURL("jdbc:mysql://mysql.tqft.net/mathematicsliteratureproject?user=readonly1&password=readonly", driver = "com.mysql.jdbc.Driver") withSession closure
 }
 
-class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String)](tag, "mathscinet_aux") {
-  def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
+class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, Option[String])](tag, "mathscinet_aux") {
+ def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
   def textTitle = column[String]("textTitle")
   def wikiTitle = column[String]("wikiTitle")
   def textAuthors = column[String]("textAuthors")
   def textCitation = column[String]("textCitation")
-  def * = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation)
+  def pdf = column[Option[String]]("pdf")
+  def * = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation, pdf)
+  def citationData = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation)
 }
 
 class MathscinetBIBTEX(tag: Tag) extends Table[(Int, String, Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String])](tag, "mathscinet_bibtex") {

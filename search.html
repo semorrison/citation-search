@@ -27,14 +27,25 @@
     	a {
     		text-decoration: none;
 		}
+		tr td:first-child {padding-left:0px;}
+ 		td {padding:10px 0px 10px 50px;}
 	</style>
 </head>
 <body>
 <b>Search the mathematics literature</b>, by entering any combination of title, authors, and journal reference.<br/>
 <input id="query" size=60/><img id="spinner" src="http://www.ajaxload.info/cache/FF/FF/FF/00/00/00/1-0.gif" style="display: none;"/>
 <br/>
-<span id="results">
-</span>
+<table>
+	<tr>
+		<td valign="top">
+			<span id="results">
+			</span>
+		</td>
+		<td valign="top" id="article-display">
+		
+		</td>
+	</tr>
+</table>
 <script>
 var delay = (function(){
   var timer = 0;
@@ -56,6 +67,7 @@ $("#query").keyup(function () {
 	       	$("#results").empty();
 	       	$("#results").append(html);
 	       	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
+	       	$("#article-display").empty().append('<iframe width=1000 height=2000 src="' + response.results[0].url + '"/>');
 	       	$("#spinner").hide();
        }
        })
