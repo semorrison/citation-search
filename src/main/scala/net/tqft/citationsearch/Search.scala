@@ -96,7 +96,7 @@ object Search {
       .build(loader)
   }
 
-  case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: Option[String])
+  case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String)
 
   val citationStore = db.getHashMap[Int, Option[Citation]]("articles").asScala
 
@@ -108,7 +108,7 @@ object Search {
           val result = citationStore.getOrElseUpdate(identifier,
             SQL { implicit session =>
               (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation)).firstOption.map {
-                case (url, doi, t, a, c) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url))
+                case (url, doi, t, a, c) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier))
               }
             })
           future { db.commit }
@@ -137,14 +137,14 @@ object Search {
           for (
             (identifier, url, doi, t, a, c) <- records
           ) {
-            val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url))
+            val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier))
             result(identifier) = Some(cite)
           }
           future {
             for (
               (identifier, url, doi, t, a, c) <- records
             ) {
-              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url))
+              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier))
               citationStore.put(identifier, Some(cite))
             }
             db.commit
@@ -176,7 +176,21 @@ object Search {
       .map(_.toLowerCase)
   }
 
-  def query(searchString: String): Seq[(Citation, Double)] = {
+  val query: String => Seq[(Citation, Double)] = {
+    val loader =
+      new CacheLoader[String, Seq[(Citation, Double)]]() {
+        override def load(identifier: String) = {
+          _query(identifier)
+        }
+      }
+
+    CacheBuilder.newBuilder()
+      .maximumSize(2000)
+      .expireAfterAccess(6, TimeUnit.HOURS)
+      .build(loader).asMap().asScala
+  }
+
+  private def _query(searchString: String): Seq[(Citation, Double)] = {
     println(searchString)
 
     val terms = tokenize(searchString).distinct

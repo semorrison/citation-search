@@ -12,12 +12,21 @@
                            ignoreClass: "tex2jax_ignore|dno"
                            },
                            TeX: {
-                           noUndefined: { attributes: { mathcolor: "red", mathbackground: "#FFEEEE", mathsize: "90%" } }
+                           noUndefined: { attributes: { mathcolor: "red", mathbackground: "#FFEEEE", mathsize: "90%" } },
+                           Macros: {
+						      bold: ['{\\bf #1}', 1],
+						      roman: ['{\\rm #1}', 1]
+							}
                            },
                            messageStyle: "none"
                            });
         </script>    
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+    <style>
+    	a {
+    		text-decoration: none;
+		}
+	</style>
 </head>
 <body>
 Search the mathematics literature:<br/>
