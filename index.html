@@ -1,73 +1,84 @@
-<!doctype html>
-<!-- The Time Machine GitHub pages theme was designed and developed by Jon Rohan, on Feb 7, 2012. -->
-<!-- Follow him for fun. http://twitter.com/jonrohan. Tail his code on http://github.com/jonrohan -->
 <html>
 <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-
-  <link rel="stylesheet" href="stylesheets/stylesheet.css" media="screen"/>
-  <link rel="stylesheet" href="stylesheets/pygment_trac.css"/>
-  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
-  <script type="text/javascript" src="javascripts/script.js"></script>
-
-  <title>citation-search</title>
-  <meta name="description" content="">
-
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-
+	<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config(
+                           {
+                           "HTML-CSS": { preferredFont: "TeX", availableFonts: ["STIX","TeX"] },
+                           tex2jax: {
+                           inlineMath: [ ["$", "$"], ["\\\\(","\\\\)"] ],
+                           displayMath: [ ["$$","$$"], ["\\[", "\\]"] ],
+                           processEscapes: true,
+                           ignoreClass: "tex2jax_ignore|dno"
+                           },
+                           TeX: {
+                           noUndefined: { attributes: { mathcolor: "red", mathbackground: "#FFEEEE", mathsize: "90%" } },
+                           Macros: {
+						      bold: ['{\\bf #1}', 1],
+						      roman: ['{\\rm #1}', 1],
+						      germ: ['{\\mathfrak #1}', 1]
+							}
+                           },
+                           messageStyle: "none"
+                           });
+        </script>    
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+    <style>
+    	a {
+    		text-decoration: none;
+		}
+		tr td:first-child {padding-left:0px;}
+ 		td {padding:10px 0px 10px 50px;}
+	</style>
 </head>
-
 <body>
+<b>Search the mathematics literature</b>, by entering any combination of title, authors, and journal reference.<br/>
+<input id="query" size=60/><img id="spinner" src="http://www.ajaxload.info/cache/FF/FF/FF/00/00/00/1-0.gif" style="display: none;"/>
+<br/>
+<table>
+	<tr>
+		<td valign="top">
+			<span id="results">
+			</span>
+		</td>
+		<td valign="top" id="article-display">
+		
+		</td>
+	</tr>
+</table>
+<script>
+var delay = (function(){
+  var timer = 0;
+  return function(callback, ms){
+    clearTimeout (timer);
+    timer = setTimeout(callback, ms);
+  };
+})();
 
-  <div class="wrapper">
-    <header>
-      <h1 class="title">citation-search</h1>
-    </header>
-    <div id="container">
-      <p class="tagline"></p>
-      <div id="main" role="main">
-        <div class="download-bar">
-        <div class="inner">
-          <a href="https://github.com/semorrison/citation-search/tarball/master" class="download-button tar"><span>Download</span></a>
-          <a href="https://github.com/semorrison/citation-search/zipball/master" class="download-button zip"><span>Download</span></a>
-          <a href="https://github.com/semorrison/citation-search" class="code">View citation-search on GitHub</a>
-        </div>
-        <span class="blc"></span><span class="trc"></span>
-        </div>
-        <article class="markdown-body">
-          <h2>
-<a name="search-the-mathematics-literature" class="anchor" href="#search-the-mathematics-literature"><span class="octicon octicon-link"></span></a>Search the mathematics literature</h2>
-        </article>
-      </div>
-    </div>
-    <footer>
-      <div class="owner">
-      <p><a href="https://github.com/semorrison" class="avatar"><img src="https://2.gravatar.com/avatar/99056c7157a7301e3182ef99dd99a353?d=https%3A%2F%2Fidenticons.github.com%2F6a90c7ab723273d40e9a8ef11444ed5c.png&amp;r=x&amp;s=60" width="48" height="48"/></a> <a href="https://github.com/semorrison">semorrison</a> maintains <a href="https://github.com/semorrison/citation-search">citation-search</a></p>
-
-
-      </div>
-      <div class="creds">
-        <small>This page generated using <a href="http://pages.github.com/">GitHub Pages</a><br/>theme by <a href="https://twitter.com/jonrohan/">Jon Rohan</a></small>
-      </div>
-    </footer>
-  </div>
-  <div class="current-section">
-    <a href="#top">Scroll to top</a>
-    <a href="https://github.com/semorrison/citation-search/tarball/master" class="tar">tar</a><a href="https://github.com/semorrison/citation-search/zipball/master" class="zip">zip</a><a href="" class="code">source code</a>
-    <p class="name"></p>
-  </div>
-
-            <script type="text/javascript">
-            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
-            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
-          </script>
-          <script type="text/javascript">
-            try {
-              var pageTracker = _gat._getTracker("UA-47834754-1");
-            pageTracker._trackPageview();
-            } catch(err) {}
-          </script>
-
+$("#query").keyup(function () {
+	delay(function() {
+		var query = $("#query").val();
+       	$.getJSON("http://polar-dawn-1849.herokuapp.com/?callback=?&q=" + query, function(response) {
+       	if($("#query").val() == query) {
+	       	var html = '<ol>\n';
+	       	for (var i = 0; i < response.results.length; i++) {
+	       		html += '<li><dt>' + '<a href="' + response.results[i].url + '">' + response.results[i].title + '</a></dt><dd>' + response.results[i].authors + '<br/>' + response.results[i].cite /* + " (" + response.results[i].score + ")" */ + '</dd></li>';
+	       	}
+	       	$("#results").empty();
+	       	$("#article-display").empty()
+	       	$("#results").append(html);
+	       	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
+	       	var iframeURL;
+	       	if(response.results.length > 0) {
+	       		if(response.results[0].pdf) { iframeURL = response.results[0].pdf } else { iframeURL = response.results[0].url };
+	       		$("#article-display").append('<iframe width=1000 height=2000 src="' + iframeURL + '"/>');
+	        }
+	       	$("#spinner").hide();
+       }
+       })
+      	$("#spinner").show();
+       }, 500);
+});
+</script>
 </body>
 </html>
