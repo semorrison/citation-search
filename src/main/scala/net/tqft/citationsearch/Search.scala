@@ -165,9 +165,9 @@ object Search {
       .build(loader).asInstanceOf[LoadingCache[Int, Option[Citation]]]
   }
 
-  val N = 656000
+  private val N = 656000
 
-  def tokenize(words: String): Seq[String] = {
+  private def tokenize(words: String): Seq[String] = {
     words
       .replaceAll("\\p{P}", " ")
       .split("[-꞉:/⁄ _]")
@@ -176,18 +176,18 @@ object Search {
       .map(_.toLowerCase)
   }
 
-  val query: String => Seq[(Citation, Double)] = {
-    val loader =
-      new CacheLoader[String, Seq[(Citation, Double)]]() {
+
+  private val queryCache =  CacheBuilder.newBuilder()
+      .maximumSize(2000)
+      .expireAfterAccess(6, TimeUnit.HOURS)
+      .build(new CacheLoader[String, Seq[(Citation, Double)]]() {
         override def load(identifier: String) = {
           _query(identifier)
         }
-      }
-
-    CacheBuilder.newBuilder()
-      .maximumSize(2000)
-      .expireAfterAccess(6, TimeUnit.HOURS)
-      .build(loader).asMap().asScala
+      })
+  
+  def query(searchString: String): Seq[(Citation, Double)] = {
+    queryCache.getUnchecked(searchString)
   }
 
   private def _query(searchString: String): Seq[(Citation, Double)] = {
