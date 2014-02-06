@@ -15,7 +15,8 @@
                            noUndefined: { attributes: { mathcolor: "red", mathbackground: "#FFEEEE", mathsize: "90%" } },
                            Macros: {
 						      bold: ['{\\bf #1}', 1],
-						      roman: ['{\\rm #1}', 1]
+						      roman: ['{\\rm #1}', 1],
+						      germ: ['{\\mathfrak #1}', 1]
 							}
                            },
                            messageStyle: "none"
@@ -29,7 +30,7 @@
 	</style>
 </head>
 <body>
-Search the mathematics literature:<br/>
+<b>Search the mathematics literature</b>, by entering any combination of title, authors, and journal reference.<br/>
 <input id="query" size=60/><img id="spinner" src="http://www.ajaxload.info/cache/FF/FF/FF/00/00/00/1-0.gif" style="display: none;"/>
 <br/>
 <span id="results">
@@ -50,7 +51,7 @@ $("#query").keyup(function () {
        	if($("#query").val() == query) {
 	       	var html = '<ol>\n';
 	       	for (var i = 0; i < response.results.length; i++) {
-	       		html += '<li>' + '<a href="' + response.results[i].url + '">' + response.results[i].title + '</a> - ' + response.results[i].authors + ' - ' + response.results[i].cite /* + " (" + response.results[i].score + ")" */ + '</li>';
+	       		html += '<li><dt>' + '<a href="' + response.results[i].url + '">' + response.results[i].title + '</a></dt><dd>' + response.results[i].authors + '<br/>' + response.results[i].cite /* + " (" + response.results[i].score + ")" */ + '</dd></li>';
 	       	}
 	       	$("#results").empty();
 	       	$("#results").append(html);

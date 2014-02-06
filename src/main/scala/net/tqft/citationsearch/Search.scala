@@ -194,7 +194,7 @@ object Search {
     println(searchString)
 
     val terms = tokenize(searchString).distinct
-    lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
+    lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
     println(idfs)
 
