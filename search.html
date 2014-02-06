@@ -69,8 +69,10 @@ $("#query").keyup(function () {
 	       	$("#results").append(html);
 	       	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
 	       	var iframeURL;
-	       	if(response.results[0].pdf) { iframeURL = response.results[0].pdf } else { iframeURL = response.results[0].url };
-	       	$("#article-display").append('<iframe width=1000 height=2000 src="' + iframeURL + '"/>');
+	       	if(response.results.length > 0) {
+	       		if(response.results[0].pdf) { iframeURL = response.results[0].pdf } else { iframeURL = response.results[0].url };
+	       		$("#article-display").append('<iframe width=1000 height=2000 src="' + iframeURL + '"/>');
+	        }
 	       	$("#spinner").hide();
        }
        })
