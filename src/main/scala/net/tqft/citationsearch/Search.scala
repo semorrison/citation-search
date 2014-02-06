@@ -167,7 +167,7 @@ object Search {
 
   private val N = 656000
 
-  private def tokenize(words: String): Seq[String] = {
+  def tokenize(words: String): Seq[String] = {
     words
       .replaceAll("\\p{P}", " ")
       .split("[-꞉:/⁄ _]")
