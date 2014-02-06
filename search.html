@@ -65,9 +65,12 @@ $("#query").keyup(function () {
 	       		html += '<li><dt>' + '<a href="' + response.results[i].url + '">' + response.results[i].title + '</a></dt><dd>' + response.results[i].authors + '<br/>' + response.results[i].cite /* + " (" + response.results[i].score + ")" */ + '</dd></li>';
 	       	}
 	       	$("#results").empty();
+	       	$("#article-display").empty()
 	       	$("#results").append(html);
 	       	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
-	       	$("#article-display").empty().append('<iframe width=1000 height=2000 src="' + response.results[0].url + '"/>');
+	       	var iframeURL;
+	       	if(response.results[0].pdf) { iframeURL = response.results[0].pdf } else { iframeURL = response.results[0].url };
+	       	$("#article-display").append('<iframe width=1000 height=2000 src="' + iframeURL + '"/>');
 	       	$("#spinner").hide();
        }
        })
