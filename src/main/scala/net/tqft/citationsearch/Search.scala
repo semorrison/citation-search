@@ -15,6 +15,7 @@ import scala.slick.driver.MySQLDriver.simple._
 import scala.collection.JavaConverters._
 import scala.concurrent.future
 import scala.concurrent.ExecutionContext.Implicits.global
+import org.apache.commons.io.FileUtils
 
 object Search {
 
@@ -32,7 +33,21 @@ object Search {
     Source.fromInputStream(new GZIPInputStream(stream))(Codec.UTF8).getLines
   }
 
-  val db = DBMaker.newFileDB(new File("db"))
+  val dbFile = new File("db")
+  val dbpFile = new File("db.p")
+
+  try {
+    if (!dbFile.exists) {
+      FileUtils.copyURLToFile(new URL("https://s3.amazonaws.com/citation-search/db"), dbFile)
+    }
+    if (!dbpFile.exists) {
+      FileUtils.copyURLToFile(new URL("https://s3.amazonaws.com/citation-search/db.p"), dbpFile)
+    }
+  } catch {
+    case e: Exception =>
+  }
+
+  val db = DBMaker.newFileDB(dbFile)
     .closeOnJvmShutdown
     .make
 
@@ -108,7 +123,7 @@ object Search {
           val result = citationStore.getOrElseUpdate(identifier,
             SQL { implicit session =>
               (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf, aux.free)).firstOption.map {
-                case (url, doi, t, a, c, pdf, free) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free)
+                case (url, doi, t, a, c, pdf, free) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free match { case Some("-") => None; case _ => free })
               }
             })
           future { db.commit }
@@ -137,14 +152,14 @@ object Search {
           for (
             (identifier, url, doi, t, a, c, pdf, free) <- records
           ) {
-            val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free)
+            val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free match { case Some("-") => None; case _ => free })
             result(identifier) = Some(cite)
           }
           future {
             for (
-              (identifier, url, doi, t, a, c,pdf, free) <- records
+              (identifier, url, doi, t, a, c, pdf, free) <- records
             ) {
-              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free)
+              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free match { case Some("-") => None; case _ => free })
               citationStore.put(identifier, Some(cite))
             }
             db.commit
@@ -176,16 +191,15 @@ object Search {
       .map(_.toLowerCase)
   }
 
+  private val queryCache = CacheBuilder.newBuilder()
+    .maximumSize(2000)
+    .expireAfterAccess(6, TimeUnit.HOURS)
+    .build(new CacheLoader[String, Seq[(Citation, Double)]]() {
+      override def load(identifier: String) = {
+        _query(identifier)
+      }
+    })
 
-  private val queryCache =  CacheBuilder.newBuilder()
-      .maximumSize(2000)
-      .expireAfterAccess(6, TimeUnit.HOURS)
-      .build(new CacheLoader[String, Seq[(Citation, Double)]]() {
-        override def load(identifier: String) = {
-          _query(identifier)
-        }
-      })
-  
   def query(searchString: String): Seq[(Citation, Double)] = {
     queryCache.getUnchecked(searchString)
   }
@@ -372,7 +386,7 @@ object SQL {
 }
 
 class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, Option[String], Option[String])](tag, "mathscinet_aux") {
- def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
+  def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
   def textTitle = column[String]("textTitle")
   def wikiTitle = column[String]("wikiTitle")
   def textAuthors = column[String]("textAuthors")

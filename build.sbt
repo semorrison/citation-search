@@ -26,6 +26,7 @@ libraryDependencies ++= Seq(
         "com.twitter" %% "finagle-http" % "6.1.0",
         "com.github.theon" %% "scala-uri" % "0.3.4",
 	"org.apache.commons" % "commons-lang3" % "3.2.1",
+	"commons-io" % "commons-io" % "2.4",
 	"com.google.guava" % "guava" % "16.0.1",
 	"com.google.code.findbugs" % "jsr305" % "2.0.2",
         "mysql" % "mysql-connector-java" % "5.1.24",
