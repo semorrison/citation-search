@@ -111,11 +111,21 @@ object Search {
       .build(loader)
   }
 
-  case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String])
+  case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
+    require(url != "")
+  }
 
   val citationStore = db.getHashMap[Int, Option[Citation]]("articles").asScala
 
   val citationCache: LoadingCache[Int, Option[Citation]] = {
+    def check(o: Option[String]) = {
+      o match {
+        case Some("-") => None
+        case Some("") => None
+        case o => o
+      }
+    }
+
     val loader =
       new CacheLoader[Int, Option[Citation]]() {
         override def load(identifier: Int) = {
@@ -123,7 +133,7 @@ object Search {
           val result = citationStore.getOrElseUpdate(identifier,
             SQL { implicit session =>
               (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf, aux.free)).firstOption.map {
-                case (url, doi, t, a, c, pdf, free) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free match { case Some("-") => None; case _ => free })
+                case (url, doi, t, a, c, pdf, free) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
               }
             })
           future { db.commit }
@@ -143,26 +153,28 @@ object Search {
             }
           }
 
-          val records = SQL { implicit session =>
-            val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf, aux.free))
-            //              println(sql.selectStatement)
-            sql.list
-          }
+          if (toLookup.nonEmpty) {
+            val records = SQL { implicit session =>
+              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf, aux.free))
+              //              println(sql.selectStatement)
+              sql.list
+            }
 
-          for (
-            (identifier, url, doi, t, a, c, pdf, free) <- records
-          ) {
-            val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free match { case Some("-") => None; case _ => free })
-            result(identifier) = Some(cite)
-          }
-          future {
             for (
               (identifier, url, doi, t, a, c, pdf, free) <- records
             ) {
-              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), pdf match { case Some("-") => None; case _ => pdf }, free match { case Some("-") => None; case _ => free })
-              citationStore.put(identifier, Some(cite))
+              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
+              result(identifier) = Some(cite)
             }
-            db.commit
+            future {
+              for (
+                (identifier, url, doi, t, a, c, pdf, free) <- records
+              ) {
+                val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
+                citationStore.put(identifier, Some(cite))
+              }
+              db.commit
+            }
           }
 
           for (id <- identifiers.asScala) {
@@ -180,7 +192,7 @@ object Search {
       .build(loader).asInstanceOf[LoadingCache[Int, Option[Citation]]]
   }
 
-  private val N = 656000
+  private val N = 669000
 
   def tokenize(words: String): Seq[String] = {
     words
@@ -225,17 +237,18 @@ object Search {
     def scores(documents: Array[Int]) = {
       (for (d <- documents) yield {
         d -> score(d)
-      }).sortBy({ p => (-p._2, -p._1) }).take(5).toSeq
+      }).sortBy({ p => (-p._2, -p._1) }).take(10).toSeq
     }
 
     lazy val mr = {
       terms.filter(_.startsWith("mr")).collect({ case MRIdentifier(k) => k }).headOption
     }
+    val sumq = idfs.map(_._2).sum
 
     val ids = (if (terms.isEmpty) {
       Seq.empty
     } else if (mr.nonEmpty) {
-      Seq((mr.get, 1000.0))
+      Seq((mr.get, sumq))
     } else if (idfs.isEmpty) {
       Seq.empty
     } else {
@@ -261,17 +274,21 @@ object Search {
         val tailQSums = idfs.map(_._2).tails.map(_.sum).toStream
         var k = 0
         while (k < idfs.size && (scored.size < 2 || (scored(0)._2 - scored(1)._2 < tailQSums(k)))) {
+          println("scoring " + idfs(k))
+
           scored ++= scores(diff(k))
           scored = scored.sortBy(p => (-p._2, -p._1))
           k += 1
         }
 
-        scored.take(5).toSeq
+        scored.take(10).toSeq
       }
     })
 
     val citations = citationCache.getAll(ids.map(_._1).asJava).asScala
-    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => (c, q) })
+    
+    
+    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => (c, q/sumq) })
 
     for (r <- results) println(r)
 

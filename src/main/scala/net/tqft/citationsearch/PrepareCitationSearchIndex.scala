@@ -19,7 +19,7 @@ object PrepareCitationSearchIndex extends App {
 
       for ((identifier, citation) <- articlesPaged) {
         try {
-          for (w <- Search.tokenize(citation)) {
+          for (w <- Search.tokenize(citation); if MRIdentifier.unapply(w).isEmpty) {
             index.getOrElseUpdate(w, scala.collection.mutable.Set[Int]()) += identifier
           }
         } catch {
@@ -32,7 +32,7 @@ object PrepareCitationSearchIndex extends App {
     val out = new PrintStream(new FileOutputStream("terms"))
     for ((term, documents) <- index) {
       out.println(term)
-      out.println(documents.mkString(","))
+      out.println(documents.toSeq.sorted.mkString(","))
     }
   }
 

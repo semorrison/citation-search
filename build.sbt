@@ -6,7 +6,7 @@ name := "citation-search"
 
 organization := "net.tqft"
 
-version := "0.1"
+version := "0.2-SNAPSHOT"
 
 scalaVersion := "2.10.3"
 
@@ -16,8 +16,7 @@ resolvers ++= Seq(
 	"Java.net Maven2 Repository" at "http://download.java.net/maven/2/",
 	"Sonatype Nexus Releases" at "https://oss.sonatype.org/content/repositories/releases",
 	"Scala Snapshots" at "http://scala-tools.org/repo-snapshots/",
-        "twitter-repo" at "http://maven.twttr.com",
-        "simmetrics repository" at "http://maven.mse.jhu.edu/m2repository"
+        "twitter-repo" at "http://maven.twttr.com"
 )
 
 // Project dependencies
