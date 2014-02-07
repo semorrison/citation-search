@@ -55,35 +55,54 @@ var delay = (function(){
   };
 })();
 
+function renderOptionalLink(href, text) {
+	if(href) {
+		return '<a href="' + href + '">' + text + '</a> ';
+	} else {
+		return '<span class="inactive">' + text + '</span> ';
+	}
+}
+
+function callback(response) {
+	if($("#query").val() == response.query) {
+	   	var html = '<ol>\n';
+	   	for (var i = 0; i < response.results.length; i++) {
+	   		html += '<li><dt>' + 
+		   		'<a href="' + response.results[i].url + '">' + 
+			   		response.results[i].title + '</a>' +
+		   		'</dt><dd>' + 
+			   		response.results[i].authors + '<br/>' + response.results[i].cite  + '<br/>' +
+			   		renderOptionalLink('http://www.ams.org/mathscinet-getitem?mr=' + response.results[i].MRNumber, 'mathscinet') +
+			   		renderOptionalLink(response.results[i].url, 'journal') + 
+			   		renderOptionalLink(response.results[i].pdf, 'pdf') + 
+			   		renderOptionalLink(response.results[i].url, 'free') +
+			   	'</dd></li>';
+		   	}
+	   	$("#results").empty();
+	   	$("#article-display").empty()
+	   	$("#results").append(html);
+	   	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
+	   	var iframeURL;
+	   	if(response.results.length > 0) {
+	   		if(response.results[0].free) {
+	   			iframeURL = response.results[0].free
+	   		} else { 
+	       		if(response.results[0].pdf) {
+	       			iframeURL = response.results[0].pdf
+	       		} else {
+	       			iframeURL = response.results[0].url
+	       		}
+	       	}
+	       	$("#article-display").append('Loading ' + renderOptionalLink(iframeURL, iframeURL) + '<br/>');
+	   		$("#article-display").append('<iframe width=1000 height=2000 src="' + iframeURL + '"/>');
+	    }
+	   	$("#spinner").hide();
+	}	
+}
+
 $("#query").keyup(function () {
 	delay(function() {
-		var query = $("#query").val();
-       	$.getJSON("http://polar-dawn-1849.herokuapp.com/?callback=?&q=" + query, function(response) {
-       	if($("#query").val() == query) {
-	       	var html = '<ol>\n';
-	       	for (var i = 0; i < response.results.length; i++) {
-	       		html += '<li><dt>' + '<a href="' + response.results[i].url + '">' + response.results[i].title + '</a></dt><dd>' + response.results[i].authors + '<br/>' + response.results[i].cite /* + " (" + response.results[i].score + ")" */ + '</dd></li>';
-	       	}
-	       	$("#results").empty();
-	       	$("#article-display").empty()
-	       	$("#results").append(html);
-	       	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
-	       	var iframeURL;
-	       	if(response.results.length > 0) {
-	       		if(response.results[0].free) {
-	       			iframeURL = response.results[0].free
-	       		} else { 
-		       		if(response.results[0].pdf) {
-		       			iframeURL = response.results[0].pdf
-		       		} else {
-		       			iframeURL = response.results[0].url
-		       		}
-		       	}
-	       		$("#article-display").append('<iframe width=1000 height=2000 src="' + iframeURL + '"/>');
-	        }
-	       	$("#spinner").hide();
-       }
-       })
+       	$.getJSON("http://polar-dawn-1849.herokuapp.com/?callback=?&q=" + $("#query").val(), callback);
       	$("#spinner").show();
        }, 500);
 });
