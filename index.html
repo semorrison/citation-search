@@ -24,9 +24,7 @@
         </script>    
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
     <style>
-    	a {
-    		text-decoration: none;
-		}
+    	a { text-decoration: none; }
 		tr td:first-child {padding-left:0px;}
  		td {padding:10px 0px 10px 50px;}
 	</style>
@@ -79,6 +77,7 @@ $("#query").keyup(function () {
 		       			iframeURL = response.results[0].url
 		       		}
 		       	}
+		       	$("#article-display").append('Loading ... <a href="' + iframeURL + '">' + iframeURL + '</a><br/>');
 	       		$("#article-display").append('<iframe width=1000 height=2000 src="' + iframeURL + '"/>');
 	        }
 	       	$("#spinner").hide();
