@@ -24,25 +24,32 @@
         </script>    
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
     <style>
-    	a {
-    		text-decoration: none;
-		}
+    	a { text-decoration: none; font-weight:bold; }
+    	span.inactive { color:#777777; }
+    	dt { font-weight:bold; }
 		tr td:first-child {padding-left:0px;}
  		td {padding:10px 0px 10px 50px;}
+ 		.right { float: right; }
 	</style>
 </head>
 <body>
-<b>Search the mathematics literature</b>, by entering any combination of title, authors, and journal reference.<br/>
+<div>
+<b>Search the mathematics literature</b>, by entering any combination of title, authors, and journal reference.
+<div class="right">
+    <a href="https://github.com/semorrison/citation-search/">(github)</a> <a href="https://github.com/semorrison/citation-search/issues">(issues)</a>
+</div>
+</div>
 <input id="query" size=60/><img id="spinner" src="http://www.ajaxload.info/cache/FF/FF/FF/00/00/00/1-0.gif" style="display: none;"/>
 <br/>
 <table>
 	<tr>
 		<td valign="top">
-			<span id="results">
-			</span>
+			<div id="results">
+			</div>
 		</td>
-		<td valign="top" id="article-display">
-		
+		<td valign="top" width=60%>
+			<div id="loading-results"></div>
+			<div id="article-display"></div>
 		</td>
 	</tr>
 </table>
@@ -57,53 +64,78 @@ var delay = (function(){
 
 function renderOptionalLink(href, text) {
 	if(href) {
-		return '<a href="' + href + '">' + text + '</a> ';
+		return $('<span><a href="#">' + text + '</a> </span>').click(function() { loadInFrame(href); });
 	} else {
 		return '<span class="inactive">' + text + '</span> ';
 	}
 }
 
+function loadInFrame(url) {
+	// decide whether to sandbox depending on whether it's a PDF
+	if(url.indexOf('pdf') == -1) {
+		$("#iframe").attr('sandbox', "allow-same-origin allow-scripts allow-forms");
+	} else {
+		$("#iframe").removeAttr('sandbox');
+	}
+	$('#loading-results').html('Loading ... <a href="' + url + '">' + url + '</a>');
+	$("#iframe").attr('src', url);
+}
+
 function callback(response) {
+// response = { 
+//	 query: "jones index for subfactors",
+//   results: [
+//    { MRNumber: 696688, title: "Index for subfactors", authors: "Jones, V. F. R.", cite: "Invent. Math. 72 (1983), no. 1, 1–25", url: "http://dx.doi.org/10.1007/BF01389127", score: 1.0 } 
+//   ]
+// }
 	if($("#query").val() == response.query) {
-	   	var html = '<ol>\n';
+	   	var html = $('<ol>');
 	   	for (var i = 0; i < response.results.length; i++) {
-	   		html += '<li><dt>' + 
-		   		'<a href="' + response.results[i].url + '">' + 
-			   		response.results[i].title + '</a>' +
-		   		'</dt><dd>' + 
-			   		response.results[i].authors + '<br/>' + response.results[i].cite  + '<br/>' +
-			   		renderOptionalLink('http://www.ams.org/mathscinet-getitem?mr=' + response.results[i].MRNumber, 'mathscinet') +
-			   		renderOptionalLink(response.results[i].url, 'journal') + 
-			   		renderOptionalLink(response.results[i].pdf, 'pdf') + 
-			   		renderOptionalLink(response.results[i].url, 'free') +
-			   	'</dd></li>';
-		   	}
+	   		var mr = 'http://www.ams.org/mathscinet-getitem?mr=' + response.results[i].MRNumber;
+	   		var journal = (response.results[i].url == mr) ? "" : response.results[i].url;
+	   		response.results[i].best = response.results[0].free ? response.results[0].free : (response.results[0].pdf ? response.results[0].pdf : response.results[0].url);
+	   		html.append(
+	   			$('<li/>')
+	   				.append($('<dt/>').append(response.results[i].title))
+	   				.append($('<dd/>')
+	   					.append(response.results[i].authors + '<br/>' + response.results[i].cite  + '<br/>')
+	   					.append(renderOptionalLink(mr, 'mathscinet'))
+			   			.append(renderOptionalLink(journal, 'journal'))
+			   			.append(renderOptionalLink(response.results[i].pdf, 'pdf'))
+			   			.append(renderOptionalLink(response.results[i].free, 'free'))
+	   				)
+	   		);
+		}
 	   	$("#results").empty();
 	   	$("#article-display").empty()
 	   	$("#results").append(html);
 	   	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
-	   	var iframeURL;
 	   	if(response.results.length > 0) {
-	   		if(response.results[0].free) {
-	   			iframeURL = response.results[0].free
-	   		} else { 
-	       		if(response.results[0].pdf) {
-	       			iframeURL = response.results[0].pdf
-	       		} else {
-	       			iframeURL = response.results[0].url
-	       		}
-	       	}
-	       	$("#article-display").append('Loading ' + renderOptionalLink(iframeURL, iframeURL) + '<br/>');
-	   		$("#article-display").append('<iframe width=1000 height=2000 src="' + iframeURL + '"/>');
+	   		$("#article-display").append('<iframe width=100% height=1000 id="iframe" name="iframe"/>');
+	   		loadInFrame(response.results[0].best);
 	    }
 	   	$("#spinner").hide();
 	}	
 }
 
+function getURLParameter(name) {
+  return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null
+}
+
+function runQuery(query) {
+       	$.getJSON("http://polar-dawn-1849.herokuapp.com/?callback=?&q=" + query, callback);
+      	$("#spinner").show();	
+}
+
+var urlQuery;
+if(urlQuery = getURLParameter('q')) {
+	$("#query").val(urlQuery);
+	runQuery(urlQuery);
+}
+
 $("#query").keyup(function () {
 	delay(function() {
-       	$.getJSON("http://polar-dawn-1849.herokuapp.com/?callback=?&q=" + $("#query").val(), callback);
-      	$("#spinner").show();
+		runQuery($("#query").val());
        }, 500);
 });
 </script>
