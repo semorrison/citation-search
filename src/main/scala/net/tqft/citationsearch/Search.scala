@@ -198,9 +198,9 @@ object Search {
     words
       .replaceAll("\\p{P}", " ")
       .split("[-꞉:/⁄ _]")
-      .filter(_.nonEmpty)
       .map(org.apache.commons.lang3.StringUtils.stripAccents)
       .map(_.toLowerCase)
+      .filter(_.nonEmpty)
   }
 
   private val queryCache = CacheBuilder.newBuilder()
@@ -222,15 +222,18 @@ object Search {
     val terms = tokenize(searchString).distinct
     lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
+    println(terms)
     println(idfs)
 
     val score: Int => Double = {
       val cache = scala.collection.mutable.Map[Int, Double]()
 
+      def _score(d: Int) = (for ((t, q) <- idfs) yield {
+        if (get(t).has(d)) q else 0.0
+      }).sum
+
       { d: Int =>
-        cache.getOrElseUpdate(d, (for ((t, q) <- idfs) yield {
-          if (get(t).has(d)) q else 0.0
-        }).sum)
+        cache.getOrElseUpdate(d, _score(d))
       }
     }
 
@@ -286,9 +289,18 @@ object Search {
     })
 
     val citations = citationCache.getAll(ids.map(_._1).asJava).asScala
-    
-    
-    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => (c, q/sumq) })
+
+    def rescore(p: (Citation, Double)) = {
+      val titleTokens = tokenize(p._1.title)
+      if (titleTokens == terms) {
+        p._2 + 20
+      } else {
+        val bonus = titleTokens.sliding(2).count(pair => terms.sliding(2).contains(pair))
+        p._2 + bonus
+      }
+    }
+
+    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => (c, q / sumq) }).sortBy(p => -rescore(p))
 
     for (r <- results) println(r)
 
