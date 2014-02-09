@@ -93,7 +93,6 @@ function callback(response) {
 	   	for (var i = 0; i < response.results.length; i++) {
 	   		var mr = 'http://www.ams.org/mathscinet-getitem?mr=' + response.results[i].MRNumber;
 	   		var journal = (response.results[i].url == mr) ? "" : response.results[i].url;
-	   		response.results[i].best = response.results[0].free ? response.results[0].free : (response.results[0].pdf ? response.results[0].pdf : response.results[0].url);
 	   		html.append(
 	   			$('<li/>')
 	   				.append($('<dt/>').append(response.results[i].title))
