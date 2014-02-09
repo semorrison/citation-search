@@ -43,7 +43,7 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
     val results = Search.query(query)
 
     response.setStatusCode(200)
-    val json = results.map({ case (c, q) => f"""   { MRNumber: ${c.MRNumber}, title: "${c.title}", authors: "${c.authors}", cite: "${c.cite}", url: "${c.url}", ${c.pdf.map(p => f"""pdf: "$p", """).getOrElse("")}${c.free.map(f => f"""free: "$f", """).getOrElse("")}score: $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ query: "$query",\n  results: [\n""", ",\n", "  ]\n}")
+    val json = results.map({ case (c, q) => f"""   { MRNumber: ${c.MRNumber}, title: "${c.title}", authors: "${c.authors}", cite: "${c.cite}", url: "${c.url}", ${c.pdf.map(p => f"""pdf: "$p", """).getOrElse("")}${c.free.map(f => f"""free: "$f", """).getOrElse("")}best: "${c.best}", score: $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ query: "$query",\n  results: [\n""", ",\n", "  ]\n}")
     callback match {
       case Some(c) => {
         response.setContentType("application/javascript")

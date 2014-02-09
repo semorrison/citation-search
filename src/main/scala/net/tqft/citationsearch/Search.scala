@@ -113,6 +113,7 @@ object Search {
 
   case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
     require(url != "")
+    def best: String = free.orElse(pdf).getOrElse(url)
   }
 
   val citationStore = db.getHashMap[Int, Option[Citation]]("articles").asScala
