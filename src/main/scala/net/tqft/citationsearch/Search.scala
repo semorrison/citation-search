@@ -20,12 +20,12 @@ import argonaut._
 import Argonaut._
 
 case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
+  def best = free.orElse(pdf).getOrElse(url)
   require(url != "")
-  def best: String = free.orElse(pdf).getOrElse(url)
 }
 object Citation {
   implicit def CitationScoreCodecJson =
-    casecodec7(Citation.apply, Citation.unapply)("MRNumber", "title", "authors", "cite", "url", "pdf", "free")
+    casecodec8({ t => Citation(t._1, t._2, t._3, t._4, t._5, t._6, t._7) }, { c: Citation => (c.MRNumber, c.title, c.authors, c.cite, c.url, c.pdf, c.free, c.best) })("MRNumber", "title", "authors", "cite", "url", "pdf", "free", "best")
 }
 case class CitationScore(citation: Citation, score: Double)
 object CitationScore {
