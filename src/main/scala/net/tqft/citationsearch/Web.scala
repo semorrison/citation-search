@@ -11,6 +11,8 @@ import java.net.URI
 import org.jboss.netty.handler.codec.http.QueryStringDecoder
 import java.net.URL
 import scala.io.Source
+import argonaut._
+import Argonaut._
 
 object Web {
   def main(args: Array[String]) {
@@ -21,18 +23,14 @@ object Web {
       .name("citationsearch")
       .bindTo(new InetSocketAddress(port))
       .build(new ResolverService)
-    println("Started.")
-    
-    Future(while(true) {
-      println("ping: " + Source.fromURL("http://polar-dawn-1849.herokuapp.com/q=ping").getLines.nonEmpty)
-      Thread.sleep(50 * 60 * 1000)
-    })
+    println("Started citation-search.")
+
   }
 }
 
 class ResolverService extends Service[HttpRequest, HttpResponse] {
-//  Future(Search.query("warming up ..."))
-  
+  //  Future(Search.query("warming up ..."))
+
   def apply(req: HttpRequest): Future[HttpResponse] = {
     val response = Response()
 
@@ -43,7 +41,12 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
     val results = Search.query(query)
 
     response.setStatusCode(200)
-    val json = results.map({ case (c, q) => f"""   { "MRNumber": ${c.MRNumber}, "title": "${c.title}", "authors": "${c.authors}", "cite": "${c.cite}", "url": "${c.url}", ${c.pdf.map(p => f""""pdf": "$p", """).getOrElse("")}${c.free.map(f => f""""free": "$f", """).getOrElse("")}"best": "${c.best}", "score": $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ "query": "$query",\n  "results": [\n""", ",\n", "  ]\n}")
+
+    val json = {
+      import argonaut._, Argonaut._
+      results.asJson.spaces2
+    }
+//    val json = results.map({ case (c, q) => f"""   { "MRNumber": ${c.MRNumber}, "title": "${c.title}", "authors": "${c.authors}", "cite": "${c.cite}", "url": "${c.url}", ${c.pdf.map(p => f""""pdf": "$p", """).getOrElse("")}${c.free.map(f => f""""free": "$f", """).getOrElse("")}"best": "${c.best}", "score": $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ "query": "$query",\n  "results": [\n""", ",\n", "  ]\n}")
     callback match {
       case Some(c) => {
         response.setContentType("application/javascript")

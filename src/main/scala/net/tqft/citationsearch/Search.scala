@@ -16,6 +16,28 @@ import scala.collection.JavaConverters._
 import scala.concurrent.future
 import scala.concurrent.ExecutionContext.Implicits.global
 import org.apache.commons.io.FileUtils
+import argonaut._
+import Argonaut._
+
+case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
+  require(url != "")
+  def best: String = free.orElse(pdf).getOrElse(url)
+}
+object Citation {
+  implicit def CitationScoreCodecJson =
+    casecodec7(Citation.apply, Citation.unapply)("MRNumber", "title", "authors", "cite", "url", "pdf", "free")
+}
+case class CitationScore(citation: Citation, score: Double)
+object CitationScore {
+  implicit def CitationScoreCodecJson =
+    casecodec2(CitationScore.apply, CitationScore.unapply)("citation", "score")
+}
+
+case class Result(query: String, results: List[CitationScore])
+object Result {
+  implicit def ResultCodecJson =
+    casecodec2(Result.apply, Result.unapply)("query", "results")
+}
 
 object Search {
 
@@ -111,11 +133,6 @@ object Search {
       .build(loader)
   }
 
-  case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
-    require(url != "")
-    def best: String = free.orElse(pdf).getOrElse(url)
-  }
-
   val citationStore = db.getHashMap[Int, Option[Citation]]("articles").asScala
 
   val citationCache: LoadingCache[Int, Option[Citation]] = {
@@ -207,17 +224,17 @@ object Search {
   private val queryCache = CacheBuilder.newBuilder()
     .maximumSize(2000)
     .expireAfterAccess(6, TimeUnit.HOURS)
-    .build(new CacheLoader[String, Seq[(Citation, Double)]]() {
+    .build(new CacheLoader[String, Result]() {
       override def load(identifier: String) = {
         _query(identifier)
       }
     })
 
-  def query(searchString: String): Seq[(Citation, Double)] = {
+  def query(searchString: String): Result = {
     queryCache.getUnchecked(searchString)
   }
 
-  private def _query(searchString: String): Seq[(Citation, Double)] = {
+  private def _query(searchString: String): Result = {
     println(searchString)
 
     val terms = tokenize(searchString).distinct
@@ -238,10 +255,10 @@ object Search {
       }
     }
 
-    def scores(documents: Array[Int]) = {
+    def scores(documents: Array[Int]): List[(Int, Double)] = {
       (for (d <- documents) yield {
         d -> score(d)
-      }).sortBy({ p => (-p._2, -p._1) }).take(10).toSeq
+      }).sortBy({ p => (-p._2, -p._1) }).take(10).toList
     }
 
     lazy val mr = {
@@ -250,11 +267,11 @@ object Search {
     val sumq = idfs.map(_._2).sum
 
     val ids = (if (terms.isEmpty) {
-      Seq.empty
+      Nil
     } else if (mr.nonEmpty) {
-      Seq((mr.get, sumq))
+      List((mr.get, sumq))
     } else if (idfs.isEmpty) {
-      Seq.empty
+      Nil
     } else {
       val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t)) }).toStream
 
@@ -291,21 +308,21 @@ object Search {
 
     val citations = citationCache.getAll(ids.map(_._1).asJava).asScala
 
-    def rescore(p: (Citation, Double)) = {
-      val titleTokens = tokenize(p._1.title)
+    def rescore(p: CitationScore) = {
+      val titleTokens = tokenize(p.citation.title)
       if (titleTokens == terms) {
-        p._2 + 20
+        p.score + 20
       } else {
         val bonus = titleTokens.sliding(2).count(pair => terms.sliding(2).contains(pair))
-        p._2 + bonus
+        p.score + bonus
       }
     }
 
-    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => (c, q / sumq) }).sortBy(p => -rescore(p))
+    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => CitationScore(c, q / sumq) }).sortBy(p => -rescore(p)).toList
 
     for (r <- results) println(r)
 
-    results
+    Result(searchString, results)
 
   }
 
@@ -464,7 +481,7 @@ object Int {
 
 object MRIdentifier {
   def unapply(s: String): Option[Int] = {
-    if (s.startsWith("mr")) {
+    if (s.toLowerCase.startsWith("mr")) {
       s.drop(2) match {
         case Int(id) => Some(id)
         case _ => None
