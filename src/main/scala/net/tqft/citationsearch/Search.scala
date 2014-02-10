@@ -23,9 +23,14 @@ case class Citation(MRNumber: Int, title: String, authors: String, cite: String,
   def best = free.orElse(pdf).getOrElse(url)
   require(url != "")
 }
+case class Citation2(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) {
+  def toCitation = Citation(MRNumber, title, authors, cite, url, pdf, free)
+}
 object Citation {
-  implicit def CitationScoreCodecJson =
-    casecodec8({ t => Citation(t._1, t._2, t._3, t._4, t._5, t._6, t._7) }, { c: Citation => (c.MRNumber, c.title, c.authors, c.cite, c.url, c.pdf, c.free, c.best) })("MRNumber", "title", "authors", "cite", "url", "pdf", "free", "best")
+  implicit def CitationScoreCodecJson = {
+    def toCitation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, title, authors, cite, url, pdf, free)
+    casecodec8(toCitation, { c: Citation => Some((c.MRNumber, c.title, c.authors, c.cite, c.url, c.pdf, c.free, c.best)) })("MRNumber", "title", "authors", "cite", "url", "pdf", "free", "best")
+  }
 }
 case class CitationScore(citation: Citation, score: Double)
 object CitationScore {
