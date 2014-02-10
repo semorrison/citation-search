@@ -95,7 +95,7 @@ function callback(response) {
 	   	var html = $('<ol>');
 	   	for (var i = 0; i < response.results.length; i++) {
        		var result = response.results[i].citation;
-	   		var mr = 'http://www.ams.org/mathscinet-getitem?mr=' + result].MRNumber;
+	   		var mr = 'http://www.ams.org/mathscinet-getitem?mr=' + result.MRNumber;
 	   		var journal = (result.url == mr) ? "" : result.url;
 	   		html.append(
 	   			$('<li/>')
