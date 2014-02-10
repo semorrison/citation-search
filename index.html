@@ -60,7 +60,8 @@ $("#query").keyup(function () {
        	if($("#query").val() == query) {
 	       	var html = '<ol>\n';
 	       	for (var i = 0; i < response.results.length; i++) {
-	       		html += '<li><dt>' + '<a href="' + response.results[i].url + '">' + response.results[i].title + '</a></dt><dd>' + response.results[i].authors + '<br/>' + response.results[i].cite /* + " (" + response.results[i].score + ")" */ + '</dd></li>';
+	       		var result = response.results[i].citation;
+	       		html += '<li><dt>' + '<a href="' + result.url + '">' + result.title + '</a></dt><dd>' + result.authors + '<br/>' + result.cite + '</dd></li>';
 	       	}
 	       	$("#results").empty();
 	       	$("#article-display").empty()
