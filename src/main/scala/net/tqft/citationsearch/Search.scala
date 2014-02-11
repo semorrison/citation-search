@@ -23,11 +23,9 @@ case class Citation(MRNumber: Int, title: String, authors: String, cite: String,
   def best = free.orElse(pdf).getOrElse(url)
   require(url != "")
 }
-case class Citation2(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) {
-  def toCitation = Citation(MRNumber, title, authors, cite, url, pdf, free)
-}
 object Citation {
   implicit def CitationScoreCodecJson = {
+    // oh, the boilerplate
     def toCitation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, title, authors, cite, url, pdf, free)
     casecodec8(toCitation, { c: Citation => Some((c.MRNumber, c.title, c.authors, c.cite, c.url, c.pdf, c.free, c.best)) })("MRNumber", "title", "authors", "cite", "url", "pdf", "free", "best")
   }
@@ -151,12 +149,21 @@ object Search {
 
     val loader =
       new CacheLoader[Int, Option[Citation]]() {
+
+        private def correctURL(url: Option[String]) = {
+          if (url.nonEmpty && url.get.startsWith("http://projecteuclid.org/getRecord?id=")) {
+            Some(url.get.replaceAllLiterally("http://projecteuclid.org/getRecord?id=", "http://projecteuclid.org/"))
+          } else {
+            url
+          }
+        }
+
         override def load(identifier: Int) = {
           import scala.collection.JavaConverters._
           val result = citationStore.getOrElseUpdate(identifier,
             SQL { implicit session =>
               (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf, aux.free)).firstOption.map {
-                case (url, doi, t, a, c, pdf, free) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
+                case (url, doi, t, a, c, pdf, free) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
               }
             })
           future { db.commit }
@@ -183,17 +190,15 @@ object Search {
               sql.list
             }
 
-            for (
+            val cites = for (
               (identifier, url, doi, t, a, c, pdf, free) <- records
-            ) {
-              val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
+            ) yield (identifier, Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free)))
+
+            for ((identifier, cite) <- cites) {
               result(identifier) = Some(cite)
             }
             future {
-              for (
-                (identifier, url, doi, t, a, c, pdf, free) <- records
-              ) {
-                val cite = Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(url).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
+              for ((identifier, cite) <- cites) {
                 citationStore.put(identifier, Some(cite))
               }
               db.commit
