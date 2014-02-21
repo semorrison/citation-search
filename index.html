@@ -27,9 +27,10 @@
     	a { text-decoration: none; font-weight:bold; }
     	span.inactive { color:#777777; }
     	dt { font-weight:bold; }
-		tr td:first-child {padding-left:0px;}
- 		td {padding:10px 0px 10px 50px;}
+		tr td:first-child {padding-left:0px; }
+ 		td { padding:10px 0px 10px 50px; }
  		.right { float: right; }
+ 		#results li:hover { background-color:#CCCCEE; }
 	</style>
 </head>
 <body>
@@ -47,7 +48,7 @@
 			<div id="results">
 			</div>
 		</td>
-		<td valign="top" width=60%>
+		<td valign="top" width=50%>
 			<div id="loading-results"></div>
 			<div id="article-display"></div>
 		</td>
@@ -107,6 +108,7 @@ function callback(response) {
 			   			.append(renderOptionalLink(result.pdf, 'pdf'))
 			   			.append(renderOptionalLink(result.free, 'free'))
 	   				)
+	   				.click((function(currentResult) { return function() { selectResult(currentResult); } })(result))
 	   		);
 		}
 	   	$("#results").empty();
@@ -119,6 +121,14 @@ function callback(response) {
 	    }
 	   	$("#spinner").hide();
 	}	
+}
+
+function selectResult(result) {
+	var json = JSON.stringify(result);
+	if (window == window.top) { 
+		loadInFrame(result.best);
+	}
+	parent.postMessage(json, "*");
 }
 
 function getURLParameter(name) {

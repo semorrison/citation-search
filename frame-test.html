@@ -1,0 +1,39 @@
+<html>
+<head>
+	<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+	<title>citation-search frame test</title>
+</head>
+<body>
+	<script>
+		function listenMessage(msg) {
+			$('iframe').remove();
+			$('body').append(
+				$('<p>').append("Outer frame received message: ")
+					    .append($('<br/>'))
+					    .append(msg.data));
+			var json = JSON.parse(msg.data);
+			var cite = $('<cite>').attr('authors', json.authors)
+								  .attr('MRNumber', json.MRNumber)
+								  .attr('cite', json.cite)
+								  .append($('<a>')
+								  	.attr('href', json.url)
+								  	.append(json.title));
+
+			var raw = $('<div>').append(cite).html();
+			$('body').append($('<p>').append($('<span>').text(raw)));
+			$('body').append(cite);
+		}
+
+		if (window.addEventListener) {
+		    window.addEventListener("message", listenMessage, false);
+		} else {
+		    window.attachEvent("onmessage", listenMessage);
+		}
+	</script>
+	<iframe width=640 height=480></iframe>
+	<script>
+		var query = encodeURIComponent("index for subfactors");
+		$('iframe').attr('src', 'index.html?q=' + query );
+	</script>
+</body>
+</html>
