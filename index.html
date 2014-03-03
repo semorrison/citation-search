@@ -73,13 +73,19 @@ function renderOptionalLink(href, text) {
 
 function loadInFrame(url) {
 	// decide whether to sandbox depending on whether it's a PDF
-	if(url.indexOf('pdf') == -1) {
-		$("#iframe").attr('sandbox', "allow-same-origin allow-scripts allow-forms");
+	if(url.indexOf('http://journals.aps.org/pra/') == -1) {
+		$("#article-display").append('<iframe width=100% height=1000 id="iframe" name="iframe"/>');
+		if(url.indexOf('pdf') == -1) {
+			$("#iframe").attr('sandbox', "allow-same-origin allow-scripts allow-forms");
+		} else {
+			$("#iframe").removeAttr('sandbox');
+		}
+		$('#loading-results').html('Loading ... <a href="' + url + '">' + url + '</a>');
+		$('#iframe').attr('src', url);
 	} else {
-		$("#iframe").removeAttr('sandbox');
+		// APS journals prohibit framing via 'X-Frame-Options' = 'SAMEORIGIN'
+		$('#loading-results').html('No preview available.');
 	}
-	$('#loading-results').html('Loading ... <a href="' + url + '">' + url + '</a>');
-	$("#iframe").attr('src', url);
 }
 
 function callback(response) {
@@ -115,8 +121,7 @@ function callback(response) {
 	   	$("#article-display").empty()
 	   	$("#results").append(html);
 	   	MathJax.Hub.Queue(["Typeset",MathJax.Hub,"results"]);
-	   	if(response.results.length > 0) {
-	   		$("#article-display").append('<iframe width=100% height=1000 id="iframe" name="iframe"/>');
+	   	if(response.results.length > 0) {	   		
 	   		loadInFrame(response.results[0].citation.best);
 	    }
 	   	$("#spinner").hide();
