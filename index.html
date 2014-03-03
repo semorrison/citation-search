@@ -30,7 +30,7 @@
 		tr td:first-child {padding-left:0px; }
  		td { padding:10px 0px 10px 50px; }
  		.right { float: right; }
- 		#results li:hover { background-color:#CCCCEE; }
+ 		#results li:hover { background-color:#CCDCEE; }
 	</style>
 </head>
 <body>
@@ -40,7 +40,7 @@
     <a href="https://github.com/semorrison/citation-search/">(github)</a> <a href="https://github.com/semorrison/citation-search/issues">(issues)</a>
 </div>
 </div>
-<input id="query" size=60/><img id="spinner" src="http://www.ajaxload.info/cache/FF/FF/FF/00/00/00/1-0.gif" style="display: none;"/>
+<input id="query" size=60 autofocus/><img id="spinner" src="http://www.ajaxload.info/cache/FF/FF/FF/00/00/00/1-0.gif" style="display: none;"/>
 <br/>
 <table>
 	<tr>
@@ -72,11 +72,11 @@ function renderOptionalLink(href, text) {
 }
 
 function loadInFrame(url) {
-	// decide whether to sandbox depending on whether it's a PDF
-	if(url.indexOf('pdf') == -1) {
-		$("#iframe").attr('sandbox', "allow-same-origin allow-scripts allow-forms");
-	} else {
+	// decide whether to sandbox
+	if(url.indexOf('oxfordjournals.org') == -1) {
 		$("#iframe").removeAttr('sandbox');
+	} else {
+		$("#iframe").attr('sandbox', "allow-same-origin allow-scripts allow-forms");
 	}
 	$('#loading-results').html('Loading ... <a href="' + url + '">' + url + '</a>');
 	$("#iframe").attr('src', url);
@@ -94,7 +94,7 @@ function callback(response) {
 // }
 	if($("#query").val() == response.query) {
 	   	var html = $('<ol>');
-	   	for (var i = 0; i < response.results.length; i++) {
+	   	for (var i = 0; i < response.results.length && i < 3; i++) {
        		var result = response.results[i].citation;
 	   		var mr = 'http://www.ams.org/mathscinet-getitem?mr=' + result.MRNumber;
 	   		var journal = (result.url == mr) ? "" : result.url;
