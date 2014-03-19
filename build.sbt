@@ -31,7 +31,9 @@ libraryDependencies ++= Seq(
 	"io.argonaut" %% "argonaut" % "6.0.1",
         "mysql" % "mysql-connector-java" % "5.1.24",
         "com.typesafe.slick" %% "slick" % "2.0.0-RC1",
-	"org.mapdb" % "mapdb" % "0.9.9"
+	"org.mapdb" % "mapdb" % "0.9.9",
+        "junit" % "junit" % "4.11" % "test",
+        "org.slf4j" % "slf4j-log4j12" % "1.6.1"
 )
 
 // Test dependencies

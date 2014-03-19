@@ -231,8 +231,14 @@ object Search {
 
   private val N = 669000
 
-  def tokenize(words: String): Seq[String] = {
-    words
+  def tokenize(string: String): Seq[String] = {
+    val words = string.split(" ").toSeq
+    val (dois, others) = words.partition({ w =>
+      w.startsWith("DOI:") || w.startsWith("doi:") || w.startsWith("http://dx.doi.org/") || w.startsWith("10.") && w.matches("""10\.[0-9]{4}/.*""")
+    })
+    
+    dois.map(_.stripPrefix("DOI:").stripPrefix("doi:").stripPrefix("http://dx.doi.org/")) ++
+    others.mkString(" ")
       .replaceAll("\\p{P}", " ")
       .split("[-꞉:/⁄ _]")
       .map(org.apache.commons.lang3.StringUtils.stripAccents)

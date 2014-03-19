@@ -10,8 +10,10 @@ object PrepareCitationSearchIndex extends App {
     def articlesPage(k: Int) = {
       println("retrieving page " + k)
       (for (
-        aux <- TableQuery[MathscinetAux]
-      ) yield (aux.MRNumber, aux.textTitle ++ " - " ++ aux.textAuthors ++ " - " ++ aux.textCitation)).drop(k * 1000).take(1000).list
+        aux <- TableQuery[MathscinetAux];
+        p <- TableQuery[MathscinetBIBTEX];
+        if aux.MRNumber === p.MRNumber
+      ) yield (aux.MRNumber, aux.textTitle ++ " - " ++ aux.textAuthors ++ " - " ++ aux.textCitation ++ " " ++ p.doi.getOrElse(""))).drop(k * 1000).take(1000).list
     }
     def articlesPaged = Iterator.from(0).map(articlesPage).takeWhile(_.nonEmpty).flatten
 
