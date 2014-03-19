@@ -21,15 +21,20 @@ import Argonaut._
 
 // TODO cache idfs
 
-case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
+sealed trait Identifier
+case class MathSciNet(mrnumber: Int)
+case class arXiv(identifier: String)
+case class Scopus(identifier: String)
+
+case class Citation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
   def best = free.orElse(pdf).getOrElse(url)
   require(url != "")
 }
 object Citation {
   implicit def CitationScoreCodecJson = {
     // oh, the boilerplate
-    def toCitation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, title, authors, cite, url, pdf, free)
-    casecodec8(toCitation, { c: Citation => Some((c.MRNumber, c.title, c.authors, c.cite, c.url, c.pdf, c.free, c.best)) })("MRNumber", "title", "authors", "cite", "url", "pdf", "free", "best")
+    def toCitation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, arXiv, Scopus, title, authors, cite, url, pdf, free)
+    casecodec10(toCitation, { c: Citation => Some((c.MRNumber, c.arXiv, c.Scopus, c.title, c.authors, c.cite, c.url, c.pdf, c.free, c.best)) })("MRNumber", "arXiv", "Scopus", "title", "authors", "cite", "url", "pdf", "free", "best")
   }
 }
 case class CitationScore(citation: Citation, score: Double)
@@ -165,7 +170,8 @@ object Search {
           val result = citationStore.getOrElseUpdate(identifier,
             SQL { implicit session =>
               (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf, aux.free)).firstOption.map {
-                case (url, doi, t, a, c, pdf, free) => Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
+                // TODO fill in other identifiers if available
+                case (url, doi, t, a, c, pdf, free) => Citation(Some(identifier), None, None, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
               }
             })
           future { db.commit }
@@ -192,9 +198,10 @@ object Search {
               sql.list
             }
 
+            // TODO fill in the arXiv identifier if available
             val cites = for (
               (identifier, url, doi, t, a, c, pdf, free) <- records
-            ) yield (identifier, Citation(identifier, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free)))
+            ) yield (identifier, Citation(Some(identifier), None, None, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free)))
 
             for ((identifier, cite) <- cites) {
               result(identifier) = Some(cite)
