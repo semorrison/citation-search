@@ -19,6 +19,8 @@ import org.apache.commons.io.FileUtils
 import argonaut._
 import Argonaut._
 
+// TODO cache idfs
+
 case class Citation(MRNumber: Int, title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
   def best = free.orElse(pdf).getOrElse(url)
   require(url != "")
@@ -305,7 +307,7 @@ object Search {
         val tailQSums = idfs.map(_._2).tails.map(_.sum).toStream
         var k = 0
         while (k < idfs.size && (scored.size < 2 || (scored(0)._2 - scored(1)._2 < tailQSums(k)))) {
-          println("scoring " + idfs(k))
+//          println("scoring " + idfs(k))
 
           scored ++= scores(diff(k))
           scored = scored.sortBy(p => (-p._2, -p._1))
