@@ -254,13 +254,13 @@ object Search {
   }
 
   private def _query(searchString: String): Result = {
-    println(searchString)
+//    println(searchString)
 
     val terms = tokenize(searchString).distinct
     lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
-    println(terms)
-    println(idfs)
+//    println(terms)
+//    println(idfs)
 
     val score: Int => Double = {
       val cache = scala.collection.mutable.Map[Int, Double]()
@@ -339,7 +339,7 @@ object Search {
 
     val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => CitationScore(c, q / sumq) }).sortBy(p => -rescore(p)).toList
 
-    for (r <- results) println(r)
+//    for (r <- results) println(r)
 
     Result(searchString, results)
 
