@@ -28,12 +28,25 @@ case class Scopus(identifier: String)
 
 case class Citation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
   def best = free.orElse(pdf).getOrElse(url)
+  private def fixOption[A](o: Option[A]) = {
+    if(o.isEmpty) {
+//      require(o match {
+//        case None => true
+//        case Some(_) => true
+//        case _ => false
+//      })
+      None
+    } else {
+      Some(o.get)
+    }
+  }
+  def fix = Citation(fixOption(MRNumber), fixOption(arXiv), fixOption(Scopus), title, authors, cite, url, fixOption(pdf), fixOption(free))
   require(url != "")
 }
 object Citation {
   implicit def CitationScoreCodecJson = {
     // oh, the boilerplate
-    def toCitation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, arXiv, Scopus, title, authors, cite, url, pdf, free)
+    def toCitation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, arXiv, Scopus, title, authors, cite, url, pdf, free).fix
     casecodec10(toCitation, { c: Citation => Some((c.MRNumber, c.arXiv, c.Scopus, c.title, c.authors, c.cite, c.url, c.pdf, c.free, c.best)) })("MRNumber", "arXiv", "Scopus", "title", "authors", "cite", "url", "pdf", "free", "best")
   }
 }
@@ -70,9 +83,11 @@ object Search {
 
   try {
     if (!dbFile.exists) {
+      println(" ... copying db from S3")
       FileUtils.copyURLToFile(new URL("https://s3.amazonaws.com/citation-search/db"), dbFile)
     }
     if (!dbpFile.exists) {
+      println(" ... copying db.p from S3")
       FileUtils.copyURLToFile(new URL("https://s3.amazonaws.com/citation-search/db.p"), dbpFile)
     }
   } catch {
@@ -173,7 +188,7 @@ object Search {
                 // TODO fill in other identifiers if available
                 case (url, doi, t, a, c, pdf, free) => Citation(Some(identifier), None, None, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
               }
-            })
+            }).map(_.fix)
           future { db.commit }
           result
         }
@@ -183,7 +198,7 @@ object Search {
           for (identifier <- identifiers.asScala) {
             citationStore.get(identifier) match {
               case Some(cite) => {
-                result(identifier) = cite
+                result(identifier) = cite.map(_.fix)
               }
               case None => {
                 toLookup += identifier
