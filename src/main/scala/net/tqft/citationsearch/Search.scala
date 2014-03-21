@@ -244,7 +244,7 @@ object Search {
       .build(loader).asInstanceOf[LoadingCache[Int, Option[Citation]]]
   }
 
-  private val N = 669000
+  private val N = 935000
 
   def tokenize(string: String): Seq[String] = {
     val words = string.split(" ").toSeq
