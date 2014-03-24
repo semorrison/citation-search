@@ -26,7 +26,18 @@ case class MathSciNet(mrnumber: Int)
 case class arXiv(identifier: String)
 case class Scopus(identifier: String)
 
-case class Citation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String]) {
+case class Citation(
+    MRNumber: Option[Int], 
+    arXiv: Option[String], 
+    Scopus: Option[String], 
+    title: String, 
+    authors: String, 
+    citation_text: String,
+    citation_markdown: String,
+    citation_html: String,
+    url: String, 
+    pdf: Option[String], 
+    free: Option[String]) {
   def best = free.orElse(pdf).getOrElse(url)
   private def fixOption[A](o: Option[A]) = {
     if(o.isEmpty) {
@@ -40,14 +51,14 @@ case class Citation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option
       Some(o.get)
     }
   }
-  def fix = Citation(fixOption(MRNumber), fixOption(arXiv), fixOption(Scopus), title, authors, cite, url, fixOption(pdf), fixOption(free))
+  def fix = Citation(fixOption(MRNumber), fixOption(arXiv), fixOption(Scopus), title, authors, citation_text, citation_markdown, citation_html, url, fixOption(pdf), fixOption(free))
   require(url != "")
 }
 object Citation {
   implicit def CitationScoreCodecJson = {
     // oh, the boilerplate
-    def toCitation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, cite: String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, arXiv, Scopus, title, authors, cite, url, pdf, free).fix
-    casecodec10(toCitation, { c: Citation => Some((c.MRNumber, c.arXiv, c.Scopus, c.title, c.authors, c.cite, c.url, c.pdf, c.free, c.best)) })("MRNumber", "arXiv", "Scopus", "title", "authors", "cite", "url", "pdf", "free", "best")
+    def toCitation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, citation_text: String, citation_markdown: String, citation_html:String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, arXiv, Scopus, title, authors, citation_text, citation_markdown, citation_html, url, pdf, free).fix
+    casecodec12(toCitation, { c: Citation => Some((c.MRNumber, c.arXiv, c.Scopus, c.title, c.authors, c.citation_text, c.citation_markdown, c.citation_html, c.url, c.pdf, c.free, c.best)) })("MRNumber", "arXiv", "Scopus", "title", "authors", "citation_text", "citation_markdown", "citation_html", "url", "pdf", "free", "best")
   }
 }
 case class CitationScore(citation: Citation, score: Double)
@@ -184,9 +195,21 @@ object Search {
           import scala.collection.JavaConverters._
           val result = citationStore.getOrElseUpdate(identifier,
             SQL { implicit session =>
-              (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf, aux.free)).firstOption.map {
+              (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free)).firstOption.map {
                 // TODO fill in other identifiers if available
-                case (url, doi, t, a, c, pdf, free) => Citation(Some(identifier), None, None, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free))
+                case (url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) => 
+                  Citation(
+                      Some(identifier), 
+                      None, 
+                      None, 
+                      title, 
+                      authors, 
+                      citation_text, 
+                      citation_markdown, 
+                      citation_html,
+                      doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), 
+                      check(pdf), 
+                      check(free))
               }
             }).map(_.fix)
           future { db.commit }
@@ -208,15 +231,28 @@ object Search {
 
           if (toLookup.nonEmpty) {
             val records = SQL { implicit session =>
-              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.pdf, aux.free))
+              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation,aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
               //              println(sql.selectStatement)
               sql.list
             }
 
             // TODO fill in the arXiv identifier if available
             val cites = for (
-              (identifier, url, doi, t, a, c, pdf, free) <- records
-            ) yield (identifier, Citation(Some(identifier), None, None, t, a, c, doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), check(pdf), check(free)))
+              (identifier, url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) <- records
+            ) yield (
+                identifier, 
+                Citation(
+                    Some(identifier), 
+                    None, 
+                    None, 
+                    title, 
+                    authors, 
+                    citation_text,
+                    citation_markdown,
+                    citation_html,
+                    doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier),
+                    check(pdf), 
+                    check(free)))
 
             for ((identifier, cite) <- cites) {
               result(identifier) = Some(cite)
@@ -472,16 +508,18 @@ object SQL {
   def apply[A](closure: slick.driver.MySQLDriver.backend.Session => A): A = Database.forURL("jdbc:mysql://mysql.tqft.net/mathematicsliteratureproject?user=readonly1&password=readonly", driver = "com.mysql.jdbc.Driver") withSession closure
 }
 
-class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, Option[String], Option[String])](tag, "mathscinet_aux") {
+class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, String, String, Option[String], Option[String])](tag, "mathscinet_aux") {
   def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
   def textTitle = column[String]("textTitle")
   def wikiTitle = column[String]("wikiTitle")
   def textAuthors = column[String]("textAuthors")
   def textCitation = column[String]("textCitation")
+  def markdownCitation = column[String]("markdownCitation")
+  def htmlCitation = column[String]("htmlCitation")
   def pdf = column[Option[String]]("pdf")
   def free = column[Option[String]]("free")
-  def * = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation, pdf, free)
-  def citationData = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation)
+  def * = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation, markdownCitation, htmlCitation, pdf, free)
+  def citationData = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation, markdownCitation, htmlCitation)
 }
 
 class MathscinetBIBTEX(tag: Tag) extends Table[(Int, String, Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String])](tag, "mathscinet_bibtex") {
