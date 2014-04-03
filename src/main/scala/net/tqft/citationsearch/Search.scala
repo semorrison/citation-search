@@ -126,8 +126,8 @@ object Search {
       }
 
     CacheBuilder.newBuilder()
-      .maximumSize(20000)
-      .expireAfterAccess(5, TimeUnit.MINUTES)
+      .maximumSize(200000)
+      .expireAfterAccess(60, TimeUnit.MINUTES)
       .build(loader)
   }
 
@@ -153,8 +153,8 @@ object Search {
       }
 
     CacheBuilder.newBuilder()
-      .maximumSize(20000)
-      .expireAfterAccess(5, TimeUnit.MINUTES)
+      .maximumSize(200000)
+      .expireAfterAccess(60, TimeUnit.MINUTES)
       .build(loader)
   }
 
