@@ -1,0 +1,5 @@
+while true; do
+	hg fetch
+	sbt update stage
+	target/start net.tqft.citationsearch.Web
+done
