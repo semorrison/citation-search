@@ -1,5 +1,5 @@
 while true; do
 	git pull
 	sbt update stage
-	target/start net.tqft.citationsearch.Web
+	target/start net.tqft.citationsearch.Web 2>&1
 done
