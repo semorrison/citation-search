@@ -1,5 +1,5 @@
 while true; do
-	hg fetch
+	git pull
 	sbt update stage
 	target/start net.tqft.citationsearch.Web
 done
