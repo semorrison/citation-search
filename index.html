@@ -141,7 +141,7 @@ function getURLParameter(name) {
 }
 
 function runQuery(query) {
-       	$.getJSON("http://polar-dawn-1849.herokuapp.com/?callback=?&q=" + query, callback);
+       	$.getJSON("https://ec2.mathoverflow.org:8080/?callback=?&q=" + query, callback);
       	$("#spinner").show();	
 }
 
