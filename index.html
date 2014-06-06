@@ -108,7 +108,7 @@ function callback(response) {
 	   			$('<li/>')
 	   				.append($('<dt/>').append(result.title))
 	   				.append($('<dd/>')
-	   					.append(result.authors + '<br/>' + result.cite  + '<br/>')
+	   					.append(result.authors + '<br/>' + result.citation_html  + '<br/>')
 	   					.append(renderOptionalLink(mr, 'mathscinet'))
 			   			.append(renderOptionalLink(journal, 'journal'))
 			   			.append(renderOptionalLink(result.pdf, 'pdf'))
