@@ -39,7 +39,7 @@ libraryDependencies ++= Seq(
 // Test dependencies
 libraryDependencies ++= Seq(
 	"junit" % "junit" % "4.8" % "test",
-	"org.scalatest" %% "scalatest" % "2.1.6" % "test"
+	"org.scalatest" %% "scalatest" % "2.2.0" % "test"
 )
 
 publishTo := Some(Resolver.sftp("tqft.net", "tqft.net", "tqft.net/releases") as ("scottmorrison", new java.io.File("/Users/scott/.ssh/id_rsa")))

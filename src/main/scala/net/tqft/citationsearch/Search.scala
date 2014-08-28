@@ -280,7 +280,7 @@ object Search {
       .build(loader).asInstanceOf[LoadingCache[Int, Option[Citation]]]
   }
 
-  private val N = 935000
+  private val N = 941577 // update, when building a new index, to match the number of bibtex records
 
   def tokenize(string: String): Seq[String] = {
     val words = string.split(" ").toSeq

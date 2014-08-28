@@ -6,13 +6,16 @@ import java.io.FileOutputStream
 object PrepareCitationSearchIndex extends App {
   import scala.slick.driver.MySQLDriver.simple._
 
+  // Make sure to run SQLAuxApp first
+  
   SQL { implicit session =>
     def articlesPage(k: Int) = {
       println("retrieving page " + k)
       (for (
         aux <- TableQuery[MathscinetAux];
         p <- TableQuery[MathscinetBIBTEX];
-        if aux.MRNumber === p.MRNumber
+        if aux.MRNumber === p.MRNumber;
+        if aux.textTitle =!= "Publications: Transactions of the American Mathematical Society" // these aren't worth showing in search results, and confuse the scoring algorithm
       ) yield (aux.MRNumber, aux.textTitle ++ " - " ++ aux.textAuthors ++ " - " ++ aux.textCitation ++ " " ++ p.doi.getOrElse(""))).drop(k * 1000).take(1000).list
     }
     def articlesPaged = Iterator.from(0).map(articlesPage).takeWhile(_.nonEmpty).flatten
