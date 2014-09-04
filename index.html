@@ -1,6 +1,6 @@
 <html>
 <head>
-	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
+	<script src="//code.jquery.com/jquery-1.10.1.min.js"></script>
     <script type="text/x-mathjax-config">
         MathJax.Hub.Config(
                            {
@@ -108,7 +108,7 @@ function callback(response) {
 	   			$('<li/>')
 	   				.append($('<dt/>').append(result.title))
 	   				.append($('<dd/>')
-	   					.append(result.authors + '<br/>' + result.cite  + '<br/>')
+	   					.append(result.authors + '<br/>' + result.citation_html  + '<br/>')
 	   					.append(renderOptionalLink(mr, 'mathscinet'))
 			   			.append(renderOptionalLink(journal, 'journal'))
 			   			.append(renderOptionalLink(result.pdf, 'pdf'))
@@ -141,7 +141,7 @@ function getURLParameter(name) {
 }
 
 function runQuery(query) {
-       	$.getJSON("http://polar-dawn-1849.herokuapp.com/?callback=?&q=" + query, callback);
+       	$.getJSON("http://ec2.mathoverflow.org:8080/?callback=?&q=" + query, callback);
       	$("#spinner").show();	
 }
 
