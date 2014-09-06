@@ -27,25 +27,25 @@ case class arXiv(identifier: String)
 case class Scopus(identifier: String)
 
 case class Citation(
-    MRNumber: Option[Int], 
-    arXiv: Option[String], 
-    Scopus: Option[String], 
-    title: String, 
-    authors: String, 
-    citation_text: String,
-    citation_markdown: String,
-    citation_html: String,
-    url: String, 
-    pdf: Option[String], 
-    free: Option[String]) {
+  MRNumber: Option[Int],
+  arXiv: Option[String],
+  Scopus: Option[String],
+  title: String,
+  authors: String,
+  citation_text: String,
+  citation_markdown: String,
+  citation_html: String,
+  url: String,
+  pdf: Option[String],
+  free: Option[String]) {
   def best = free.orElse(pdf).getOrElse(url)
   private def fixOption[A](o: Option[A]) = {
-    if(o.isEmpty) {
-//      require(o match {
-//        case None => true
-//        case Some(_) => true
-//        case _ => false
-//      })
+    if (o.isEmpty) {
+      //      require(o match {
+      //        case None => true
+      //        case Some(_) => true
+      //        case _ => false
+      //      })
       None
     } else {
       Some(o.get)
@@ -57,7 +57,7 @@ case class Citation(
 object Citation {
   implicit def CitationScoreCodecJson = {
     // oh, the boilerplate
-    def toCitation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, citation_text: String, citation_markdown: String, citation_html:String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, arXiv, Scopus, title, authors, citation_text, citation_markdown, citation_html, url, pdf, free).fix
+    def toCitation(MRNumber: Option[Int], arXiv: Option[String], Scopus: Option[String], title: String, authors: String, citation_text: String, citation_markdown: String, citation_html: String, url: String, pdf: Option[String], free: Option[String], best: String) = Citation(MRNumber, arXiv, Scopus, title, authors, citation_text, citation_markdown, citation_html, url, pdf, free).fix
     casecodec12(toCitation, { c: Citation => Some((c.MRNumber, c.arXiv, c.Scopus, c.title, c.authors, c.citation_text, c.citation_markdown, c.citation_html, c.url, c.pdf, c.free, c.best)) })("MRNumber", "arXiv", "Scopus", "title", "authors", "citation_text", "citation_markdown", "citation_html", "url", "pdf", "free", "best")
   }
 }
@@ -197,19 +197,19 @@ object Search {
             SQL { implicit session =>
               (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free)).firstOption.map {
                 // TODO fill in other identifiers if available
-                case (url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) => 
+                case (url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) =>
                   Citation(
-                      Some(identifier), 
-                      None, 
-                      None, 
-                      title, 
-                      authors, 
-                      citation_text, 
-                      citation_markdown, 
-                      citation_html,
-                      doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier), 
-                      check(pdf), 
-                      check(free))
+                    Some(identifier),
+                    None,
+                    None,
+                    title,
+                    authors,
+                    citation_text,
+                    citation_markdown,
+                    citation_html,
+                    doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier),
+                    check(pdf),
+                    check(free))
               }
             }).map(_.fix)
           future { db.commit }
@@ -231,7 +231,7 @@ object Search {
 
           if (toLookup.nonEmpty) {
             val records = SQL { implicit session =>
-              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation,aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
+              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
               //              println(sql.selectStatement)
               sql.list
             }
@@ -240,19 +240,19 @@ object Search {
             val cites = for (
               (identifier, url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) <- records
             ) yield (
-                identifier, 
-                Citation(
-                    Some(identifier), 
-                    None, 
-                    None, 
-                    title, 
-                    authors, 
-                    citation_text,
-                    citation_markdown,
-                    citation_html,
-                    doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier),
-                    check(pdf), 
-                    check(free)))
+              identifier,
+              Citation(
+                Some(identifier),
+                None,
+                None,
+                title,
+                authors,
+                citation_text,
+                citation_markdown,
+                citation_html,
+                doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier),
+                check(pdf),
+                check(free)))
 
             for ((identifier, cite) <- cites) {
               result(identifier) = Some(cite)
@@ -287,9 +287,9 @@ object Search {
     val (dois, others) = words.partition({ w =>
       w.startsWith("DOI:") || w.startsWith("doi:") || w.startsWith("http://dx.doi.org/") || w.startsWith("10.") && w.matches("""10\.[0-9]{4}/.*""")
     })
-    
+
     dois.map(_.stripPrefix("DOI:").stripPrefix("doi:").stripPrefix("http://dx.doi.org/")) ++
-    others.mkString(" ")
+      others.mkString(" ")
       .replaceAll("\\p{P}", " ")
       .split("[-꞉:/⁄ _]")
       .map(org.apache.commons.lang3.StringUtils.stripAccents)
@@ -310,14 +310,21 @@ object Search {
     queryCache.getUnchecked(searchString)
   }
 
+  def goodMatch(searchString: String) = {
+    val matches = query(searchString).results.sortBy(-_.score)
+
+    matches.headOption.filter(s => s.score > 0.89).orElse(
+      matches.sliding(2).filter(p => p.size == 2 && p(0).score > 0.48 && scala.math.pow(p(0).score, 1.75) > p(1).score).toStream.headOption.map(_.head))
+  }
+
   private def _query(searchString: String): Result = {
-//    println(searchString)
+    //    println(searchString)
 
     val terms = tokenize(searchString).distinct
     lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
-//    println(terms)
-//    println(idfs)
+    //    println(terms)
+    //    println(idfs)
 
     val score: Int => Double = {
       val cache = scala.collection.mutable.Map[Int, Double]()
@@ -371,7 +378,7 @@ object Search {
         val tailQSums = idfs.map(_._2).tails.map(_.sum).toStream
         var k = 0
         while (k < idfs.size && (scored.size < 2 || (scored(0)._2 - scored(1)._2 < tailQSums(k)))) {
-//          println("scoring " + idfs(k))
+          //          println("scoring " + idfs(k))
 
           scored ++= scores(diff(k))
           scored = scored.sortBy(p => (-p._2, -p._1))
@@ -396,7 +403,7 @@ object Search {
 
     val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => CitationScore(c, q / sumq) }).sortBy(p => -rescore(p)).toList
 
-//    for (r <- results) println(r)
+    //    for (r <- results) println(r)
 
     Result(searchString, results)
 
