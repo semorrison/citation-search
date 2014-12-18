@@ -109,9 +109,8 @@ object Search {
     .closeOnJvmShutdown
     .make
 
-  val store = db.getHashMap[String, Array[Int]]("terms")
-
   lazy val index = {
+    val store = db.getHashMap[String, Array[Int]]("terms")
     if (store.isEmpty) {
       println("Starting up search; loading data...")
       var count = 0
