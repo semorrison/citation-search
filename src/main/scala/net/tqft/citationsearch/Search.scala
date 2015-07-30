@@ -279,7 +279,15 @@ object Search {
       .build(loader).asInstanceOf[LoadingCache[Int, Option[Citation]]]
   }
 
-  private val N = 968806 // update, when building a new index, to match the number of bibtex records
+//  private val N = 970010 // update, when building a new index, to match the number of bibtex records
+  
+  private val N = {
+    val s = scala.collection.mutable.Set[Int]()
+    for((_, v) <- index) {
+      s ++= v
+    }
+    s.size
+  }
 
   def tokenize(string: String): Seq[String] = {
     val words = string.split(" ").toSeq
