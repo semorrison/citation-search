@@ -327,7 +327,8 @@ object Search {
   private def _query(searchString: String): Result = {
     //    println(searchString)
 
-    val terms = tokenize(searchString).distinct
+    val allTerms = tokenize(searchString)
+    val terms = allTerms.distinct
     lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
     //    println(terms)
@@ -365,7 +366,11 @@ object Search {
     } else {
       val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t)) }).toStream
 
+//      println(idfs)
       val intersections = sets.tail.scanLeft(sets.head._2)(_ intersect _._2)
+//      for(i <- intersections) {
+//        println(i.toList)
+//      }
       val j = intersections.indexWhere(_.isEmpty) match {
         case -1 => intersections.size
         case j => j
@@ -400,15 +405,16 @@ object Search {
 
     def rescore(p: CitationScore) = {
       val titleTokens = tokenize(p.citation.title)
-      if (titleTokens == terms) {
-        p.score + 20
+      val newScore = if (titleTokens == allTerms.take(titleTokens.size)) {
+        1 - (1 - p.score)/2
       } else {
-        val bonus = titleTokens.sliding(2).count(pair => terms.sliding(2).contains(pair))
-        p.score + bonus
+        val bonus = titleTokens.sliding(2).count(pair => terms.sliding(2).contains(pair)).toDouble / titleTokens.size
+        p.score + bonus*(1-p.score)/2
       }
+      CitationScore(p.citation, newScore)
     }
 
-    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => CitationScore(c, q / sumq) }).sortBy(p => -rescore(p)).toList
+    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => rescore(CitationScore(c, q / sumq)) }).sortBy(p => -p.score).toList
 
     //    for (r <- results) println(r)
 

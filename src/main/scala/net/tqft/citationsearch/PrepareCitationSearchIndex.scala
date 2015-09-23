@@ -17,6 +17,8 @@ object PrepareCitationSearchIndex extends App {
   val index = scala.collection.mutable.Map[String, scala.collection.mutable.Set[Int]]()
 
   var articleCount = 0
+
+  val step = 5000
   
   SQL { implicit session =>
     def articlesPage(k: Int) = {
@@ -28,7 +30,7 @@ object PrepareCitationSearchIndex extends App {
         if aux.textTitle =!= "Publications: Transactions of the American Mathematical Society" // these aren't worth showing in search results, and confuse the scoring algorithm
       ) yield {
         (aux.MRNumber, aux.textTitle ++ " - " ++ aux.textAuthors ++ " - " ++ aux.textCitation ++ " " ++ p.doi.getOrElse("") ++ " " ++ p.fjournal.getOrElse(""))
-      }).drop(k * 1000).take(1000).list
+      }).drop(k * step).take(step).list
     }
     def articlesPaged = Iterator.from(0).map(articlesPage).takeWhile(_.nonEmpty).flatten
 
@@ -48,9 +50,11 @@ object PrepareCitationSearchIndex extends App {
 
   val dbFile = new File("db")
   val dbpFile = new File("db.p")
+  val termsFile = new File("terms.gz")
 
   dbFile.delete
   dbpFile.delete
+  termsFile.delete
 
   val db = DBMaker.newFileDB(dbFile)
     .closeOnJvmShutdown
@@ -60,7 +64,7 @@ object PrepareCitationSearchIndex extends App {
 
   var count = 0
 
-  val out = new PrintStream(new GZIPOutputStream(new FileOutputStream("terms.gz")))
+  val out = new PrintStream(new GZIPOutputStream(new FileOutputStream(termsFile)))
   for ((term, documents) <- index) {
     out.println(term)
     out.println(documents.toSeq.sorted.mkString(","))
@@ -71,9 +75,9 @@ object PrepareCitationSearchIndex extends App {
   out.close
 
   db.commit
-  
+
   println(s" .. rebuilt index: $articleCount articles")
-  
+
   val bucket = S3.bytes("citation-search")
   bucket("terms.gz") = Files.readAllBytes(Paths.get("terms.gz"))
   bucket("db") = Files.readAllBytes(Paths.get("db"))
