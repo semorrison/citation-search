@@ -370,7 +370,7 @@ object Search {
       //        println(i.toList)
       //      }
 
-      println(s"intersections = ${intersections.toList.map(_.toList)}")
+//      println(s"intersections = ${intersections.toList.map(_.toList)}")
 
       val j = intersections.indexWhere(_.isEmpty) match {
         case -1 => intersections.size
