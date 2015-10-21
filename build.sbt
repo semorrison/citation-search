@@ -8,7 +8,7 @@ organization := "net.tqft"
 
 version := "0.2-SNAPSHOT"
 
-scalaVersion := "2.11.2"
+scalaVersion := "2.11.7"
 
 scalacOptions += "-target:jvm-1.7"
 

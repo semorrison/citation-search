@@ -26,11 +26,22 @@ object Web {
     println("Started citation-search.")
 
   }
+
+}
+
+object Throttle {
+  private var lastQuery = System.currentTimeMillis()
+  def apply() {
+    if (System.currentTimeMillis() - lastQuery < 500) Thread.sleep(1000)
+  }
+  lastQuery = System.currentTimeMillis()
 }
 
 class ResolverService extends Service[HttpRequest, HttpResponse] {
   //  Future(Search.query("warming up ..."))
 
+//  Throttle()
+  
   def apply(req: HttpRequest): Future[HttpResponse] = {
     val response = Response()
 
@@ -44,9 +55,9 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
 
     val json = {
       import argonaut._, Argonaut._
-      
+
       try {
-      results.asJson.spaces2
+        results.asJson.spaces2
       } catch {
         case e: Exception => {
           println("Except while writing JSON for: ")
@@ -55,7 +66,7 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
         }
       }
     }
-//    val json = results.map({ case (c, q) => f"""   { "MRNumber": ${c.MRNumber}, "title": "${c.title}", "authors": "${c.authors}", "cite": "${c.cite}", "url": "${c.url}", ${c.pdf.map(p => f""""pdf": "$p", """).getOrElse("")}${c.free.map(f => f""""free": "$f", """).getOrElse("")}"best": "${c.best}", "score": $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ "query": "$query",\n  "results": [\n""", ",\n", "  ]\n}")
+    //    val json = results.map({ case (c, q) => f"""   { "MRNumber": ${c.MRNumber}, "title": "${c.title}", "authors": "${c.authors}", "cite": "${c.cite}", "url": "${c.url}", ${c.pdf.map(p => f""""pdf": "$p", """).getOrElse("")}${c.free.map(f => f""""free": "$f", """).getOrElse("")}"best": "${c.best}", "score": $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ "query": "$query",\n  "results": [\n""", ",\n", "  ]\n}")
     callback match {
       case Some(c) => {
         response.setContentType("application/javascript")
