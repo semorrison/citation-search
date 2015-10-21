@@ -5,7 +5,12 @@
 
 db
 db.p
+db.t
+terms
 terms.gz
+
+.cache-main
+.cache-tests
 
 bin
 *.class

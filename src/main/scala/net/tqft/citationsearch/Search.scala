@@ -27,17 +27,17 @@ case class arXiv(identifier: String)
 case class Scopus(identifier: String)
 
 case class Citation(
-  MRNumber: Option[Int],
-  arXiv: Option[String],
-  Scopus: Option[String],
-  title: String,
-  authors: String,
-  citation_text: String,
-  citation_markdown: String,
-  citation_html: String,
-  url: String,
-  pdf: Option[String],
-  free: Option[String]) {
+    MRNumber: Option[Int],
+    arXiv: Option[String],
+    Scopus: Option[String],
+    title: String,
+    authors: String,
+    citation_text: String,
+    citation_markdown: String,
+    citation_html: String,
+    url: String,
+    pdf: Option[String],
+    free: Option[String]) {
   def best = free.orElse(pdf).getOrElse(url)
   private def fixOption[A](o: Option[A]) = {
     if (o.isEmpty) {
@@ -279,7 +279,14 @@ object Search {
       .build(loader).asInstanceOf[LoadingCache[Int, Option[Citation]]]
   }
 
-  private val N = 968806 // update, when building a new index, to match the number of bibtex records
+  private val N = {
+    val s = scala.collection.mutable.Set[Int]()
+    for ((_, v) <- index) {
+      s ++= v
+    }
+    //    println(s"Counting index --- there are ${s.size} bibtex records")
+    s.size
+  }
 
   def tokenize(string: String): Seq[String] = {
     val words = string.split(" ").toSeq
@@ -317,13 +324,14 @@ object Search {
   }
 
   private def _query(searchString: String): Result = {
-    //    println(searchString)
+//    println(s"searchString = $searchString")
 
-    val terms = tokenize(searchString).distinct
+    val allTerms = tokenize(searchString)
+    val terms = allTerms.distinct
     lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
-    //    println(terms)
-    //    println(idfs)
+//    println(s"terms = $terms")
+//    println(s"idfs = $idfs")
 
     val score: Int => Double = {
       val cache = scala.collection.mutable.Map[Int, Double]()
@@ -358,6 +366,12 @@ object Search {
       val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t)) }).toStream
 
       val intersections = sets.tail.scanLeft(sets.head._2)(_ intersect _._2)
+      //      for(i <- intersections) {
+      //        println(i.toList)
+      //      }
+
+//      println(s"intersections = ${intersections.toList.map(_.toList)}")
+
       val j = intersections.indexWhere(_.isEmpty) match {
         case -1 => intersections.size
         case j => j
@@ -377,7 +391,7 @@ object Search {
         val tailQSums = idfs.map(_._2).tails.map(_.sum).toStream
         var k = 0
         while (k < idfs.size && (scored.size < 2 || (scored(0)._2 - scored(1)._2 < tailQSums(k)))) {
-          //          println("scoring " + idfs(k))
+//          println("scoring " + idfs(k))
 
           scored ++= scores(diff(k))
           scored = scored.sortBy(p => (-p._2, -p._1))
@@ -388,19 +402,25 @@ object Search {
       }
     })
 
+//    print(s"ids = $ids")
+    
     val citations = citationCache.getAll(ids.map(_._1).asJava).asScala
 
     def rescore(p: CitationScore) = {
+//      println(s"rescoring $p")
       val titleTokens = tokenize(p.citation.title)
-      if (titleTokens == terms) {
-        p.score + 20
+      val newScore = if (titleTokens == allTerms.take(titleTokens.size)) {
+//        println("   contains all title tokens!")
+        1 - (1 - p.score) / 2
       } else {
-        val bonus = titleTokens.sliding(2).count(pair => terms.sliding(2).contains(pair))
-        p.score + bonus
+        val bonus = titleTokens.sliding(2).count(pair => terms.sliding(2).contains(pair)).toDouble / titleTokens.size
+//        println(s"    bonus = $bonus")
+        p.score + bonus * (1 - p.score) / 2
       }
+      CitationScore(p.citation, newScore)
     }
 
-    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => CitationScore(c, q / sumq) }).sortBy(p => -rescore(p)).toList
+    val results = ids.map({ case (i, q) => (citations(i), q) }).collect({ case (Some(c), q) => rescore(CitationScore(c, q / (sumq + 1))) }).sortBy(p => -p.score).toList
 
     //    for (r <- results) println(r)
 
