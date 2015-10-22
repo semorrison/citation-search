@@ -73,6 +73,7 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
         response.contentString = c + "(" + json + ");"
       }
       case None => {
+        response.headers.set("Access-Control-Allow-Origin", "*")        
         response.setContentType("application/json")
         response.contentString = json
       }
