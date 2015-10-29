@@ -16,14 +16,37 @@ import Argonaut._
 
 object Web {
   def main(args: Array[String]) {
-    val port = Properties.envOrElse("PORT", "8080").toInt
-    println("Starting on port:" + port)
-    ServerBuilder()
-      .codec(Http())
-      .name("citationsearch")
-      .bindTo(new InetSocketAddress(port))
-      .build(new ResolverService)
-    println("Started citation-search.")
+    val port = Properties.envOrElse("PORT", "80").toInt
+    try {
+      println("Starting on port: " + port)
+
+      ServerBuilder()
+        .codec(Http())
+        .name("citationsearch")
+        .bindTo(new InetSocketAddress(port))
+        .build(new ResolverService)
+
+      println("Started citation-search.")
+
+    } catch {
+      case e: Throwable => e.printStackTrace
+    }
+
+    try {
+      println("Starting https on port: 443")
+
+      ServerBuilder()
+        .tls("./cert", "./key")
+        .codec(Http())
+        .name("citationsearch over https")
+        .bindTo(new InetSocketAddress(443))
+        .build(new ResolverService)
+
+      println("Started citation-search over https.")
+
+    } catch {
+      case e: Throwable => e.printStackTrace
+    }
 
   }
 }
@@ -44,9 +67,9 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
 
     val json = {
       import argonaut._, Argonaut._
-      
+
       try {
-      results.asJson.spaces2
+        results.asJson.spaces2
       } catch {
         case e: Exception => {
           println("Except while writing JSON for: ")
@@ -55,7 +78,7 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
         }
       }
     }
-//    val json = results.map({ case (c, q) => f"""   { "MRNumber": ${c.MRNumber}, "title": "${c.title}", "authors": "${c.authors}", "cite": "${c.cite}", "url": "${c.url}", ${c.pdf.map(p => f""""pdf": "$p", """).getOrElse("")}${c.free.map(f => f""""free": "$f", """).getOrElse("")}"best": "${c.best}", "score": $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ "query": "$query",\n  "results": [\n""", ",\n", "  ]\n}")
+    //    val json = results.map({ case (c, q) => f"""   { "MRNumber": ${c.MRNumber}, "title": "${c.title}", "authors": "${c.authors}", "cite": "${c.cite}", "url": "${c.url}", ${c.pdf.map(p => f""""pdf": "$p", """).getOrElse("")}${c.free.map(f => f""""free": "$f", """).getOrElse("")}"best": "${c.best}", "score": $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ "query": "$query",\n  "results": [\n""", ",\n", "  ]\n}")
     callback match {
       case Some(c) => {
         response.setContentType("application/javascript")
