@@ -16,7 +16,7 @@ import Argonaut._
 
 object Web {
   def main(args: Array[String]) {
-    val port = Properties.envOrElse("PORT", "80").toInt
+    val port = Properties.envOrElse("PORT", "8080").toInt
     try {
       println("Starting on port: " + port)
 
