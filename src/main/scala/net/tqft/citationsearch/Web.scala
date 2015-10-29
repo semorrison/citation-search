@@ -49,11 +49,22 @@ object Web {
     }
 
   }
+
+}
+
+object Throttle {
+  private var lastQuery = System.currentTimeMillis()
+  def apply() {
+    if (System.currentTimeMillis() - lastQuery < 500) Thread.sleep(1000)
+  }
+  lastQuery = System.currentTimeMillis()
 }
 
 class ResolverService extends Service[HttpRequest, HttpResponse] {
   //  Future(Search.query("warming up ..."))
 
+//  Throttle()
+  
   def apply(req: HttpRequest): Future[HttpResponse] = {
     val response = Response()
 
@@ -85,6 +96,7 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
         response.contentString = c + "(" + json + ");"
       }
       case None => {
+        response.headers.set("Access-Control-Allow-Origin", "*")        
         response.setContentType("application/json")
         response.contentString = json
       }
