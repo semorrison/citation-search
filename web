@@ -1,3 +1,1 @@
-while true; do
-	target/start net.tqft.citationsearch.Web
-done
+target/start net.tqft.citationsearch.Web

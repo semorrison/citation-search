@@ -66,13 +66,12 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
         results.asJson.spaces2
       } catch {
         case e: Exception => {
-          println("Except while writing JSON for: ")
+          println("Exception while writing JSON for: ")
           println(results)
           throw e
         }
       }
     }
-    //    val json = results.map({ case (c, q) => f"""   { "MRNumber": ${c.MRNumber}, "title": "${c.title}", "authors": "${c.authors}", "cite": "${c.cite}", "url": "${c.url}", ${c.pdf.map(p => f""""pdf": "$p", """).getOrElse("")}${c.free.map(f => f""""free": "$f", """).getOrElse("")}"best": "${c.best}", "score": $q } """.replaceAllLiterally("\\", "\\\\") }).mkString(s"""{ "query": "$query",\n  "results": [\n""", ",\n", "  ]\n}")
     callback match {
       case Some(c) => {
         response.setContentType("application/javascript")
