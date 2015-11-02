@@ -31,23 +31,6 @@ object Web {
     } catch {
       case e: Throwable => e.printStackTrace
     }
-
-    try {
-      println("Starting https on port: 443")
-
-      ServerBuilder()
-        .tls("./cert", "./key")
-        .codec(Http())
-        .name("citationsearch over https")
-        .bindTo(new InetSocketAddress(443))
-        .build(new ResolverService)
-
-      println("Started citation-search over https.")
-
-    } catch {
-      case e: Throwable => e.printStackTrace
-    }
-
   }
 
 }
