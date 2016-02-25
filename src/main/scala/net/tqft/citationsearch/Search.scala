@@ -18,13 +18,43 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import org.apache.commons.io.FileUtils
 import argonaut._
 import Argonaut._
+import scala.reflect.ClassTag
+import java.sql.Date
 
 // TODO cache idfs
 
-sealed trait Identifier
-case class MathSciNet(mrnumber: Int)
-case class arXiv(identifier: String)
-case class Scopus(identifier: String)
+//sealed trait Identifier
+//case class MathSciNet(mrnumber: Int) {
+//  override def toString = "MR" + mrnumber
+//}
+//case class arXiv(identifier: String) {
+//  override def toString = "arXiv:" + identifier
+//}
+//case class Scopus(identifier: String) {
+//  override def toString = "scopus:" + identifier
+//}
+//
+//object Identifier {
+//  implicit val ordering = Ordering.by[Identifier, String]({ s: Identifier => s.toString }) 
+//}
+
+object Tokenize {
+   def apply(string: String): Seq[String] = {
+    val words = string.split(" ").toSeq
+    val (dois, others) = words.partition({ w =>
+      w.startsWith("DOI:") || w.startsWith("doi:") || w.startsWith("http://dx.doi.org/") || w.startsWith("10.") && w.matches("""10\.[0-9]{4}/.*""")
+    })
+
+    dois.map(_.stripPrefix("DOI:").stripPrefix("doi:").stripPrefix("http://dx.doi.org/")) ++
+      others.mkString(" ")
+      .replaceAll("\\p{P}", " ")
+      .split("[-꞉:/⁄ _]")
+      .map(org.apache.commons.lang3.StringUtils.stripAccents)
+      .map(_.toLowerCase)
+      .filter(_.nonEmpty)
+  }
+
+}
 
 case class Citation(
     MRNumber: Option[Int],
@@ -92,32 +122,36 @@ object Search {
   val dbFile = new File("db")
   val dbpFile = new File("db.p")
 
-  try {
-    if (!dbFile.exists) {
-      println(" ... copying db from S3")
-      FileUtils.copyURLToFile(new URL("https://s3.amazonaws.com/citation-search/db"), dbFile)
+  def ensureDatabasePresent {
+    try {
+      if (!dbFile.exists) {
+        println(" ... copying db from S3")
+        FileUtils.copyURLToFile(new URL("https://s3.amazonaws.com/citation-search/db"), dbFile)
+      }
+      if (!dbpFile.exists) {
+        println(" ... copying db.p from S3")
+        FileUtils.copyURLToFile(new URL("https://s3.amazonaws.com/citation-search/db.p"), dbpFile)
+      }
+    } catch {
+      case e: Exception =>
     }
-    if (!dbpFile.exists) {
-      println(" ... copying db.p from S3")
-      FileUtils.copyURLToFile(new URL("https://s3.amazonaws.com/citation-search/db.p"), dbpFile)
-    }
-  } catch {
-    case e: Exception =>
   }
+
+  ensureDatabasePresent
 
   val db = DBMaker.newFileDB(dbFile)
     .closeOnJvmShutdown
     .make
 
   lazy val index = {
-    val store = db.getHashMap[String, Array[Int]]("terms")
+    val store = db.getHashMap[String, Array[String]]("terms")
     if (store.isEmpty) {
       println("Starting up search; loading data...")
       var count = 0
       for (pair <- indexLines.grouped(2)) {
         count += 1
         if (count % 1000 == 0) { println(s"Loaded $count terms"); db.commit }
-        store.put(pair(0), pair(1).split(",").map(_.toInt))
+        store.put(pair(0), pair(1).split(","))
       }
       db.commit
       println(" .. loaded index")
@@ -129,7 +163,7 @@ object Search {
 
   val cachedIndex = {
     val loader =
-      new CacheLoader[String, Option[Array[Int]]]() {
+      new CacheLoader[String, Option[Array[String]]]() {
         override def load(key: String) = {
           index.get(key)
         }
@@ -149,7 +183,7 @@ object Search {
         override def load(term: String) = {
           cachedIndex.getUnchecked(term) match {
             case None => None
-            case Some(documents) => {
+            case Some(documents: Array[String]) => {
               val n = documents.length
               val r = scala.math.log((N - n + 0.5) / (n + 0.5))
               if (r < 0) {
@@ -168,9 +202,9 @@ object Search {
       .build(loader)
   }
 
-  val citationStore = db.getHashMap[Int, Option[Citation]]("articles").asScala
+  val citationStore = db.getHashMap[String, Option[Citation]]("articles").asScala
 
-  val citationCache: LoadingCache[Int, Option[Citation]] = {
+  val citationCache: LoadingCache[String, Option[Citation]] = {
     def check(o: Option[String]) = {
       o match {
         case Some("-") => None
@@ -180,7 +214,7 @@ object Search {
     }
 
     val loader =
-      new CacheLoader[Int, Option[Citation]]() {
+      new CacheLoader[String, Option[Citation]]() {
 
         private def correctURL(url: Option[String]) = {
           if (url.nonEmpty && url.get.startsWith("http://projecteuclid.org/getRecord?id=")) {
@@ -190,9 +224,23 @@ object Search {
           }
         }
 
-        override def load(identifier: Int) = {
+        override def load(identifier: String) = {
+          if (identifier.startsWith("MR")) {
+            loadMathSciNet(identifier.stripPrefix("MR").toInt)
+          } else if (identifier.startsWith("arXiv:")) {
+            loadArXiv(identifier.stripPrefix("arXiv:"))
+          } else {
+            ???
+          }
+        }
+
+        def loadArXiv(identifier:String) = {
+          ???
+        }
+        
+        def loadMathSciNet(identifier: Int) = {
           import scala.collection.JavaConverters._
-          val result = citationStore.getOrElseUpdate(identifier,
+          val result = citationStore.getOrElseUpdate("MR" + identifier,
             SQL { implicit session =>
               (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free)).firstOption.map {
                 // TODO fill in other identifiers if available
@@ -214,23 +262,32 @@ object Search {
           future { db.commit }
           result
         }
-        override def loadAll(identifiers: java.lang.Iterable[_ <: Int]): java.util.Map[Int, Option[Citation]] = {
-          val result = scala.collection.mutable.Map[Int, Option[Citation]]()
-          val toLookup = scala.collection.mutable.ListBuffer[Int]()
+        override def loadAll(identifiers: java.lang.Iterable[_ <: String]): java.util.Map[String, Option[Citation]] = {
+          val result = scala.collection.mutable.Map[String, Option[Citation]]()
+          val toLookupMathSciNet = scala.collection.mutable.ListBuffer[Int]()
+          val toLookupArXiv = scala.collection.mutable.ListBuffer[String]()
           for (identifier <- identifiers.asScala) {
             citationStore.get(identifier) match {
               case Some(cite) => {
                 result(identifier) = cite.map(_.fix)
               }
               case None => {
-                toLookup += identifier
+                if (identifier.startsWith("MR")) {
+                  toLookupMathSciNet += identifier.stripPrefix("MR").toInt
+                } else if (identifier.startsWith("arXiv:")) {
+                  toLookupArXiv += identifier.stripPrefix("arXiv:")
+                }
               }
             }
           }
 
-          if (toLookup.nonEmpty) {
+          if (toLookupArXiv.nonEmpty) {
+            ???
+          }
+
+          if (toLookupMathSciNet.nonEmpty) {
             val records = SQL { implicit session =>
-              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
+              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookupMathSciNet); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
               //              println(sql.selectStatement)
               sql.list
             }
@@ -254,11 +311,11 @@ object Search {
                 check(free)))
 
             for ((identifier, cite) <- cites) {
-              result(identifier) = Some(cite)
+              result("MR" + identifier) = Some(cite)
             }
             future {
               for ((identifier, cite) <- cites) {
-                citationStore.put(identifier, Some(cite))
+                citationStore.put("MR" + identifier, Some(cite))
               }
               db.commit
             }
@@ -276,11 +333,11 @@ object Search {
     CacheBuilder.newBuilder()
       .maximumSize(2000)
       .expireAfterAccess(5, TimeUnit.MINUTES)
-      .build(loader).asInstanceOf[LoadingCache[Int, Option[Citation]]]
+      .build(loader).asInstanceOf[LoadingCache[String, Option[Citation]]]
   }
 
   private val N = {
-    val s = scala.collection.mutable.Set[Int]()
+    val s = scala.collection.mutable.Set[String]()
     for ((_, v) <- index) {
       s ++= v
     }
@@ -288,21 +345,7 @@ object Search {
     s.size
   }
 
-  def tokenize(string: String): Seq[String] = {
-    val words = string.split(" ").toSeq
-    val (dois, others) = words.partition({ w =>
-      w.startsWith("DOI:") || w.startsWith("doi:") || w.startsWith("http://dx.doi.org/") || w.startsWith("10.") && w.matches("""10\.[0-9]{4}/.*""")
-    })
-
-    dois.map(_.stripPrefix("DOI:").stripPrefix("doi:").stripPrefix("http://dx.doi.org/")) ++
-      others.mkString(" ")
-      .replaceAll("\\p{P}", " ")
-      .split("[-꞉:/⁄ _]")
-      .map(org.apache.commons.lang3.StringUtils.stripAccents)
-      .map(_.toLowerCase)
-      .filter(_.nonEmpty)
-  }
-
+ 
   private val queryCache = CacheBuilder.newBuilder()
     .maximumSize(2000)
     .expireAfterAccess(6, TimeUnit.HOURS)
@@ -324,31 +367,33 @@ object Search {
   }
 
   private def _query(searchString: String): Result = {
-//    println(s"searchString = $searchString")
+    //    println(s"searchString = $searchString")
 
-    val allTerms = tokenize(searchString)
+    val allTerms = Tokenize(searchString)
     val terms = allTerms.distinct
     lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
-//    println(s"terms = $terms")
-//    println(s"idfs = $idfs")
+    //    println(s"terms = $terms")
+    //    println(s"idfs = $idfs")
 
-    val score: Int => Double = {
-      val cache = scala.collection.mutable.Map[Int, Double]()
+    val score: String => Double = {
+      val cache = scala.collection.mutable.Map[String, Double]()
 
-      def _score(d: Int) = (for ((t, q) <- idfs) yield {
+//      implicit val tag = scala.reflect.classTag[String] 
+      
+      def _score(d: String) = (for ((t, q) <- idfs) yield {
         if (get(t).has(d)) q else 0.0
       }).sum
 
-      { d: Int =>
+      { d: String =>
         cache.getOrElseUpdate(d, _score(d))
       }
     }
 
-    def scores(documents: Array[Int]): List[(Int, Double)] = {
+    def scores(documents: Array[String]): List[(String, Double)] = {
       (for (d <- documents) yield {
         d -> score(d)
-      }).sortBy({ p => (-p._2, -p._1) }).take(10).toList
+      }).sortBy({ p => (-p._2, p._1) }).take(10).toList
     }
 
     lazy val mr = {
@@ -359,7 +404,7 @@ object Search {
     val ids = (if (terms.isEmpty) {
       Nil
     } else if (mr.nonEmpty) {
-      List((mr.get, sumq))
+      List(("MR" + mr.get, sumq))
     } else if (idfs.isEmpty) {
       Nil
     } else {
@@ -370,7 +415,7 @@ object Search {
       //        println(i.toList)
       //      }
 
-//      println(s"intersections = ${intersections.toList.map(_.toList)}")
+      //      println(s"intersections = ${intersections.toList.map(_.toList)}")
 
       val j = intersections.indexWhere(_.isEmpty) match {
         case -1 => intersections.size
@@ -384,17 +429,17 @@ object Search {
       } else {
 
         // start scoring the unions, until we have a winner
-        val unions = sets.scanLeft(Array.empty[Int])(_ union _._2)
+        val unions = sets.scanLeft(Array.empty[String])(_ union _._2)
         val diff = sets.map(_._2).zip(unions).map(p => p._1 diff p._2)
-        var scored = scala.collection.mutable.Buffer[(Int, Double)]()
+        var scored = scala.collection.mutable.Buffer[(String, Double)]()
 
         val tailQSums = idfs.map(_._2).tails.map(_.sum).toStream
         var k = 0
         while (k < idfs.size && (scored.size < 2 || (scored(0)._2 - scored(1)._2 < tailQSums(k)))) {
-//          println("scoring " + idfs(k))
+          //          println("scoring " + idfs(k))
 
           scored ++= scores(diff(k))
-          scored = scored.sortBy(p => (-p._2, -p._1))
+          scored = scored.sortBy(p => (-p._2, p._1))
           k += 1
         }
 
@@ -402,19 +447,19 @@ object Search {
       }
     })
 
-//    print(s"ids = $ids")
-    
+    //    print(s"ids = $ids")
+
     val citations = citationCache.getAll(ids.map(_._1).asJava).asScala
 
     def rescore(p: CitationScore) = {
-//      println(s"rescoring $p")
-      val titleTokens = tokenize(p.citation.title)
+      //      println(s"rescoring $p")
+      val titleTokens = Tokenize(p.citation.title)
       val newScore = if (titleTokens == allTerms.take(titleTokens.size)) {
-//        println("   contains all title tokens!")
+        //        println("   contains all title tokens!")
         1 - (1 - p.score) / 2
       } else {
         val bonus = titleTokens.sliding(2).count(pair => terms.sliding(2).contains(pair)).toDouble / titleTokens.size
-//        println(s"    bonus = $bonus")
+        //        println(s"    bonus = $bonus")
         p.score + bonus * (1 - p.score) / 2
       }
       CitationScore(p.citation, newScore)
@@ -428,8 +473,10 @@ object Search {
 
   }
 
-  implicit class SetArray(array: Array[Int]) {
-    def has(x: Int): Boolean = {
+  implicit class SetArray[I: Ordering: ClassTag](array: Array[I]) {
+
+    import Ordered.orderingToOrdered
+    def has(x: I): Boolean = {
       var a = 0
       var b = array.length
       while (b > a + 1) {
@@ -446,11 +493,11 @@ object Search {
       }
       array(a) == x
     }
-    def intersect(other: Array[Int]): Array[Int] = {
+    def intersect(other: Array[I]): Array[I] = {
       var i = 0
       var j = 0
       var k = 0
-      val result = new Array[Int](scala.math.min(array.length, other.length))
+      val result = new Array[I](scala.math.min(array.length, other.length))
       while (i < array.length && j < other.length) {
         val ai = array(i)
         val aj = other(j)
@@ -467,11 +514,11 @@ object Search {
       }
       result.take(k)
     }
-    def union(other: Array[Int]): Array[Int] = {
+    def union(other: Array[I]): Array[I] = {
       var i = 0
       var j = 0
       var k = 0
-      val result = new Array[Int](array.length + other.length)
+      val result = new Array[I](array.length + other.length)
       while (i < array.length && j < other.length) {
         val ai = array(i)
         val aj = other(j)
@@ -500,11 +547,11 @@ object Search {
       }
       result.take(k)
     }
-    def diff(other: Array[Int]): Array[Int] = {
+    def diff(other: Array[I]): Array[I] = {
       var i = 0
       var j = 0
       var k = 0
-      val result = new Array[Int](array.length)
+      val result = new Array[I](array.length)
       while (i < array.length && j < other.length) {
         val ai = array(i)
         val aj = other(j)
@@ -534,6 +581,25 @@ object SQL {
   def apply[A](closure: slick.driver.MySQLDriver.backend.Session => A): A = Database.forURL("jdbc:mysql://mysql.tqft.net/mathematicsliteratureproject?user=readonly1&password=readonly", driver = "com.mysql.jdbc.Driver") withSession closure
 }
 
+class Arxiv(tag: Tag) extends Table[(String, Date, Option[Date], String, String, String, Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], String)](tag, "arxiv") {
+  def arxivid = column[String]("arxivid", O.PrimaryKey)
+  def created = column[Date]("created")
+  def updated = column[Option[Date]]("updated")
+  def authors = column[String]("authors")
+  def title = column[String]("title")
+  def categories = column[String]("categories")
+  def comments = column[Option[String]]("comments")
+  def proxy = column[Option[String]]("proxy")
+  def reportno = column[Option[String]]("reportno")
+  def mscclass = column[Option[String]]("mscclass")
+  def acmclass = column[Option[String]]("acmclass")
+  def journalref = column[Option[String]]("journalref")
+  def doi = column[Option[String]]("doi")
+  def license = column[Option[String]]("license")
+  def `abstract` = column[String]("abstract")
+  def * = (arxivid, created, updated, authors, title, categories, comments, proxy, reportno, mscclass, acmclass, journalref, doi, license, `abstract`)
+}
+
 class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, String, String, Option[String], Option[String])](tag, "mathscinet_aux") {
   def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
   def textTitle = column[String]("textTitle")
@@ -548,7 +614,7 @@ class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String
   def citationData = (MRNumber, textTitle, wikiTitle, textAuthors, textCitation, markdownCitation, htmlCitation)
 }
 
-class MathscinetBIBTEX(tag: Tag) extends Table[(Int, String, Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String])](tag, "mathscinet_bibtex") {
+class MathscinetBIBTEX(tag: Tag) extends Table[(Int, String, Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], (Option[String], Option[String]))](tag, "mathscinet_bibtex") {
   def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
   def `type` = column[String]("type")
   def title = column[Option[String]]("title")
@@ -571,7 +637,8 @@ class MathscinetBIBTEX(tag: Tag) extends Table[(Int, String, Option[String], Opt
   def edition = column[Option[String]]("edition")
   def publisher = column[Option[String]]("publisher")
   def series = column[Option[String]]("series")
-  def * = (MRNumber, `type`, title, booktitle, author, editor, doi, url, journal, fjournal, issn, isbn, volume, issue, year, pages, mrclass, number, address, edition, publisher, series)
+  def note = column[Option[String]]("note")
+  def * = (MRNumber, `type`, title, booktitle, author, editor, doi, url, journal, fjournal, issn, isbn, volume, issue, year, pages, mrclass, number, address, edition, publisher, (series, note))
 
 }
 

@@ -10,7 +10,9 @@ object CitationSearchTestApp extends App {
   
 //  println(Search.query("index for subfactors").asJson.spaces2)
   
-  println(Search.query("Two observation on unsolved problem #1046 on prime circles of"))
+//  println(Search.query("On a tensor category for the exceptional Lie groups - Cohen, A.M. and de Man, R. "))
+//  println(Search.query("Some indications that the exception groups form a series - Cohen, A. M."))
+  println(Search.query("Equations Différentielles à points singuliers réguliers deligne"))
   
 //    val s = "Subfactors with index at most 5, part 1: the odometer, morrison, snyder, cmp"
 //    for (q <- s.reverse.tails.toSeq.reverse.map(_.reverse)) {
