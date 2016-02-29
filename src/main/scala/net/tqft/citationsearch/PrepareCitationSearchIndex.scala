@@ -10,7 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 object PrepareCitationSearchIndex extends App {
-  import scala.slick.driver.MySQLDriver.simple._
+  import slick.driver.MySQLDriver.api._
 
   // Make sure to run SQLAuxApp first
 
@@ -20,9 +20,9 @@ object PrepareCitationSearchIndex extends App {
 
   val step = 5000
   
-  SQL { implicit session =>
     def articlesPage(k: Int) = {
       println("retrieving page " + k)
+      SQL {
       (for (
         aux <- TableQuery[MathscinetAux];
         p <- TableQuery[MathscinetBIBTEX];
@@ -30,8 +30,8 @@ object PrepareCitationSearchIndex extends App {
         if aux.textTitle =!= "Publications: Transactions of the American Mathematical Society" // these aren't worth showing in search results, and confuse the scoring algorithm
       ) yield {
         (aux.MRNumber, aux.textTitle ++ " - " ++ aux.textAuthors ++ " - " ++ aux.textCitation ++ " " ++ p.doi.getOrElse("") ++ " " ++ p.fjournal.getOrElse(""))
-      }).drop(k * step).take(step).list
-    }
+      }).drop(k * step).take(step).result
+    }}
     def articlesPaged = Iterator.from(0).map(articlesPage).takeWhile(_.nonEmpty).flatten
 
     for ((identifier, citation) <- articlesPaged) {
@@ -43,7 +43,6 @@ object PrepareCitationSearchIndex extends App {
       } catch {
         case e: Exception => println("Exception while preparing citation for:\n" + identifier); e.printStackTrace()
       }
-    }
   }
 
   println(index.size)

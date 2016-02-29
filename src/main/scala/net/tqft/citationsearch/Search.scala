@@ -10,10 +10,12 @@ import java.io.File
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
 import java.util.concurrent.TimeUnit
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 import com.google.common.cache.LoadingCache
-import scala.slick.driver.MySQLDriver.simple._
+import slick.driver.MySQLDriver.api._
 import scala.collection.JavaConverters._
-import scala.concurrent.future
+import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import org.apache.commons.io.FileUtils
 import argonaut._
@@ -193,8 +195,21 @@ object Search {
         override def load(identifier: Int) = {
           import scala.collection.JavaConverters._
           val result = citationStore.getOrElseUpdate(identifier,
-            SQL { implicit session =>
-              (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free)).firstOption.map {
+              (SQL {
+                (for (
+                    a <- TableQuery[MathscinetBIBTEX];
+                aux <- TableQuery[MathscinetAux];
+                if a.MRNumber === identifier;
+                if aux.MRNumber === identifier) yield 
+                (a.url,
+                    a.doi,
+                    aux.wikiTitle,
+                    aux.textAuthors,
+                    aux.textCitation, 
+                    aux.markdownCitation,
+                    aux.htmlCitation,
+                    aux.pdf, 
+                    aux.free)) }).headOption.map {
                 // TODO fill in other identifiers if available
                 case (url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) =>
                   Citation(
@@ -210,8 +225,8 @@ object Search {
                     check(pdf),
                     check(free))
               }
-            }).map(_.fix)
-          future { db.commit }
+            ).map(_.fix)
+          Future { db.commit }
           result
         }
         override def loadAll(identifiers: java.lang.Iterable[_ <: Int]): java.util.Map[Int, Option[Citation]] = {
@@ -229,10 +244,8 @@ object Search {
           }
 
           if (toLookup.nonEmpty) {
-            val records = SQL { implicit session =>
-              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
-              //              println(sql.selectStatement)
-              sql.list
+            val records = SQL { 
+              (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
             }
 
             // TODO fill in the arXiv identifier if available
@@ -256,7 +269,7 @@ object Search {
             for ((identifier, cite) <- cites) {
               result(identifier) = Some(cite)
             }
-            future {
+            Future {
               for ((identifier, cite) <- cites) {
                 citationStore.put(identifier, Some(cite))
               }
@@ -531,9 +544,16 @@ object Search {
 }
 
 object SQL {
-  def apply[A](closure: slick.driver.MySQLDriver.backend.Session => A): A = Database.forURL("jdbc:mysql://mysql.tqft.net/mathematicsliteratureproject?user=readonly1&password=readonly", driver = "com.mysql.jdbc.Driver") withSession closure
+    val db = {
+    import slick.driver.MySQLDriver.api._
+    Database.forURL("jdbc:mysql://mysql.tqft.net/mathematicsliteratureproject?user=mathscinetbot&password=zytopex", driver = "com.mysql.jdbc.Driver")
+  }
+  
+  def apply[R](x: slick.lifted.Rep[Int]) = Await.result(db.run(x.result), Duration.Inf)
+  def apply[R](x: slick.lifted.Query[Any, R, Seq]): Seq[R] = Await.result(db.run(x.result), Duration.Inf)
+  def stream[R](x: slick.lifted.Query[Any, R, Seq]): slick.backend.DatabasePublisher[R] = db.stream(x.result)
+  def apply[R, S <: NoStream, E <: Effect](x: slick.profile.SqlAction[R, S, E]): R = Await.result(db.run(x), Duration.Inf)
 }
-
 class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, String, String, Option[String], Option[String])](tag, "mathscinet_aux") {
   def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
   def textTitle = column[String]("textTitle")
