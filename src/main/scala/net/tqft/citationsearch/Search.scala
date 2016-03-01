@@ -242,8 +242,7 @@ object Search {
         
         def loadMathSciNet(identifier: Int) = {
           import scala.collection.JavaConverters._
-<<<<<<< HEAD
-          val result = citationStore.getOrElseUpdate(identifier,
+          val result = citationStore.getOrElseUpdate("MR" + identifier,
               (SQL {
                 (for (
                     a <- TableQuery[MathscinetBIBTEX];
@@ -259,11 +258,6 @@ object Search {
                     aux.htmlCitation,
                     aux.pdf, 
                     aux.free)) }).headOption.map {
-=======
-          val result = citationStore.getOrElseUpdate("MR" + identifier,
-            SQL { implicit session =>
-              (for (a <- TableQuery[MathscinetBIBTEX]; aux <- TableQuery[MathscinetAux]; if a.MRNumber === identifier; if aux.MRNumber === identifier) yield (a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free)).firstOption.map {
->>>>>>> beda8499bae20ca4b70b6e02f16f77a08b577aaf
                 // TODO fill in other identifiers if available
                 case (url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) =>
                   Citation(
@@ -302,21 +296,9 @@ object Search {
             }
           }
 
-<<<<<<< HEAD
-          if (toLookup.nonEmpty) {
-            val records = SQL { 
-              (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookup); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
-=======
-          if (toLookupArXiv.nonEmpty) {
-            ???
-          }
-
           if (toLookupMathSciNet.nonEmpty) {
-            val records = SQL { implicit session =>
-              val sql = (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookupMathSciNet); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
-              //              println(sql.selectStatement)
-              sql.list
->>>>>>> beda8499bae20ca4b70b6e02f16f77a08b577aaf
+            val records = SQL { 
+              (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookupMathSciNet); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
             }
 
             // TODO fill in the arXiv identifier if available
@@ -615,8 +597,6 @@ object SQL {
   def stream[R](x: slick.lifted.Query[Any, R, Seq]): slick.backend.DatabasePublisher[R] = db.stream(x.result)
   def apply[R, S <: NoStream, E <: Effect](x: slick.profile.SqlAction[R, S, E]): R = Await.result(db.run(x), Duration.Inf)
 }
-<<<<<<< HEAD
-=======
 
 class Arxiv(tag: Tag) extends Table[(String, Date, Option[Date], String, String, String, Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], String)](tag, "arxiv") {
   def arxivid = column[String]("arxivid", O.PrimaryKey)
@@ -637,7 +617,6 @@ class Arxiv(tag: Tag) extends Table[(String, Date, Option[Date], String, String,
   def * = (arxivid, created, updated, authors, title, categories, comments, proxy, reportno, mscclass, acmclass, journalref, doi, license, `abstract`)
 }
 
->>>>>>> beda8499bae20ca4b70b6e02f16f77a08b577aaf
 class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, String, String, Option[String], Option[String])](tag, "mathscinet_aux") {
   def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
   def textTitle = column[String]("textTitle")

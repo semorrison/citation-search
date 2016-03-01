@@ -19,14 +19,8 @@ object PrepareCitationSearchIndex extends App {
 
   var articleCount = 0
 
-<<<<<<< HEAD
   val step = 5000
   
-=======
-  val step = 10000
-
-  SQL { implicit session =>
->>>>>>> beda8499bae20ca4b70b6e02f16f77a08b577aaf
     def articlesPage(k: Int) = {
       println("retrieving page " + k)
       SQL {
@@ -43,11 +37,11 @@ object PrepareCitationSearchIndex extends App {
 
     def arXivPage(k: Int) = {
       println("retrieving page " + k)
-      (for (
+      SQL { (for (
         a <- TableQuery[Arxiv]
       ) yield {
         (a.arxivid, a.title ++ " - " ++ a.authors ++ " - " ++ a.journalref.getOrElse("") ++ " " ++ a.doi.getOrElse(""))
-      }).drop(k * step).take(step).list
+      }).drop(k * step).take(step) }
     }.map({
       case (i, t) => (i, 
           pandoc.latexToText(
