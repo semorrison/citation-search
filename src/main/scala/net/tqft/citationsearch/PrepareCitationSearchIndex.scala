@@ -20,10 +20,10 @@ object PrepareCitationSearchIndex extends App {
   var articleCount = 0
 
   val step = 5000
-  
-    def articlesPage(k: Int) = {
-      println("retrieving page " + k)
-      SQL {
+
+  def articlesPage(k: Int) = {
+    println("retrieving page " + k)
+    SQL {
       (for (
         aux <- TableQuery[MathscinetAux];
         p <- TableQuery[MathscinetBIBTEX];
@@ -32,50 +32,52 @@ object PrepareCitationSearchIndex extends App {
       ) yield {
         (aux.MRNumber, aux.textTitle ++ " - " ++ aux.textAuthors ++ " - " ++ aux.textCitation ++ " " ++ p.doi.getOrElse("") ++ " " ++ p.fjournal.getOrElse(""))
       }).drop(k * step).take(step).result
-    }}
-    def articlesPaged = Iterator.from(0).map(articlesPage).takeWhile(_.nonEmpty).flatten
+    }
+  }
+  def articlesPaged = Iterator.from(0).map(articlesPage).takeWhile(_.nonEmpty).flatten
 
-    def arXivPage(k: Int) = {
-      println("retrieving page " + k)
-      SQL { (for (
-        a <- TableQuery[Arxiv]
+  def arXivPage(k: Int): Seq[(String, String)] = {
+    try {
+    println("retrieving page " + k)
+    (SQL {
+      (for (
+        a <- TableQuery[Arxiv];
+        p <- TableQuery[ArxivAux];
+        if p.arxivid === a.arxivid
       ) yield {
-        (a.arxivid, a.title ++ " - " ++ a.authors ++ " - " ++ a.journalref.getOrElse("") ++ " " ++ a.doi.getOrElse(""))
-      }).drop(k * step).take(step) }
-    }.map({
-      case (i, t) => (i, 
-          pandoc.latexToText(
-              StringEscapeUtils.unescapeHtml4(
-                  t.replaceAllLiterally("<author>", "")
-                  .replaceAllLiterally("<keyname>", "")
-                  .replaceAllLiterally("<forenames>", "")
-                  .replaceAllLiterally("</author>", " ")
-                  .replaceAllLiterally("</keyname>", " ")
-                  .replaceAllLiterally("</forenames>", " ").replaceAll("<affiliation>[^<]*</affiliation>", "")).replaceAllLiterally("\n","")))
+        (a.arxivid, p.textTitle ++ " - " ++ p.textAuthors ++ " - " ++ a.journalref.getOrElse("") ++ " " ++ a.doi.getOrElse(""))
+      }).drop(k * step).take(step)
     })
-    def arXivPaged = Iterator.from(0).map(arXivPage).takeWhile(_.nonEmpty).flatten
-
-//    for ((identifier, citation) <- arXivPaged) {
-//      println("arXiv:" + identifier)
-//      println(citation)
-//      articleCount = articleCount + 1
-//      try {
-//        for (w <- Tokenize(citation); if MRIdentifier.unapply(w).isEmpty) {
-//          index.getOrElseUpdate(w, scala.collection.mutable.Set[String]()) += "arXiv:" + identifier
-//        }
-//      } catch {
-//        case e: Exception => println("Exception while preparing citation for:\narXiv:" + identifier); e.printStackTrace()
-//      }
-//    }
-    for ((identifier, citation) <- articlesPaged) {
-      articleCount = articleCount + 1
-      try {
-        for (w <- Tokenize(citation); if MRIdentifier.unapply(w).isEmpty) {
-          index.getOrElseUpdate(w, scala.collection.mutable.Set[String]()) += "MR" + identifier
-        }
-      } catch {
-        case e: Exception => println("Exception while preparing citation for:\nMR" + identifier); e.printStackTrace()
+    } catch {
+      case e: Exception => {
+        e.printStackTrace
+        arXivPage(k)
       }
+    }
+  }
+  def arXivPaged = Iterator.from(0).map(arXivPage).takeWhile(_.nonEmpty).flatten
+
+  for ((identifier, citation) <- arXivPaged) {
+    println("arXiv:" + identifier)
+    println(citation)
+    articleCount = articleCount + 1
+    try {
+      for (w <- Tokenize(citation); if MRIdentifier.unapply(w).isEmpty) {
+        index.getOrElseUpdate(w, scala.collection.mutable.Set[String]()) += "arXiv:" + identifier
+      }
+    } catch {
+      case e: Exception => println("Exception while preparing citation for:\narXiv:" + identifier); e.printStackTrace()
+    }
+  }
+  for ((identifier, citation) <- articlesPaged) {
+    articleCount = articleCount + 1
+    try {
+      for (w <- Tokenize(citation); if MRIdentifier.unapply(w).isEmpty) {
+        index.getOrElseUpdate(w, scala.collection.mutable.Set[String]()) += "MR" + identifier
+      }
+    } catch {
+      case e: Exception => println("Exception while preparing citation for:\nMR" + identifier); e.printStackTrace()
+    }
   }
 
   println(index.size)
@@ -94,7 +96,7 @@ object PrepareCitationSearchIndex extends App {
 
   val store = db.getHashMap[String, Array[String]]("terms")
 
-  var count = 0 
+  var count = 0
 
   val out = new PrintStream(new GZIPOutputStream(new FileOutputStream(termsFile)))
   for ((term, documents) <- index) {

@@ -177,7 +177,10 @@ object Search {
       .build(loader)
   }
 
-  def get(t: String) = cachedIndex.getUnchecked(t).get
+  def get(t: String, include_mathscinet: Boolean, include_arXiv: Boolean) = cachedIndex.getUnchecked(t).get.collect({
+    case id if id.startsWith("arXiv:") && include_arXiv => id
+    case id if id.startsWith("MR") && include_mathscinet => id
+  })
 
   val idf = {
     val loader =
@@ -375,7 +378,7 @@ object Search {
       matches.sliding(2).filter(p => p.size == 2 && p(0).score > 0.48 && scala.math.pow(p(0).score, 1.75) > p(1).score).toStream.headOption.map(_.head))
   }
 
-  private def _query(searchString: String): Result = {
+  private def _query(searchString: String, include_mathscinet: Boolean = true, include_arXiv: Boolean = false): Result = {
     //    println(s"searchString = $searchString")
 
     val allTerms = Tokenize(searchString)
@@ -391,7 +394,7 @@ object Search {
 //      implicit val tag = scala.reflect.classTag[String] 
       
       def _score(d: String) = (for ((t, q) <- idfs) yield {
-        if (get(t).has(d)) q else 0.0
+        if (get(t, include_mathscinet, include_arXiv).has(d)) q else 0.0
       }).sum
 
       { d: String =>
@@ -417,7 +420,7 @@ object Search {
     } else if (idfs.isEmpty) {
       Nil
     } else {
-      val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t)) }).toStream
+      val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t, include_mathscinet, include_arXiv)) }).toStream
 
       val intersections = sets.tail.scanLeft(sets.head._2)(_ intersect _._2)
       //      for(i <- intersections) {
@@ -616,6 +619,15 @@ class Arxiv(tag: Tag) extends Table[(String, Date, Option[Date], String, String,
   def `abstract` = column[String]("abstract")
   def * = (arxivid, created, updated, authors, title, categories, comments, proxy, reportno, mscclass, acmclass, journalref, doi, license, `abstract`)
 }
+
+class ArxivAux(tag: Tag) extends Table[(String, String, String)](tag, "arxiv_aux") {
+  def arxivid = column[String]("arxivid", O.PrimaryKey)
+  def textTitle = column[String]("textTitle")
+  def textAuthors = column[String]("textAuthors")
+  def * = (arxivid, textTitle, textAuthors)
+}
+
+
 
 class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, String, String, Option[String], Option[String])](tag, "mathscinet_aux") {
   def MRNumber = column[Int]("MRNumber", O.PrimaryKey)
