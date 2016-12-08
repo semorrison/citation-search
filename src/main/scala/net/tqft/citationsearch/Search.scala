@@ -41,7 +41,7 @@ import java.sql.Date
 //}
 
 object Tokenize {
-   def apply(string: String): Seq[String] = {
+  def apply(string: String): Seq[String] = {
     val words = string.split(" ").toSeq
     val (dois, others) = words.partition({ w =>
       w.startsWith("DOI:") || w.startsWith("doi:") || w.startsWith("http://dx.doi.org/") || w.startsWith("10.") && w.matches("""10\.[0-9]{4}/.*""")
@@ -146,14 +146,16 @@ object Search {
     .make
 
   lazy val index = {
-    val store = db.getHashMap[String, Array[String]]("terms")
+    val store = db.getHashMap[String, Map[String, Array[String]]]("terms")
     if (store.isEmpty) {
       println("Starting up search; loading data...")
       var count = 0
       for (pair <- indexLines.grouped(2)) {
         count += 1
         if (count % 1000 == 0) { println(s"Loaded $count terms"); db.commit }
-        store.put(pair(0), pair(1).split(","))
+        val ids = pair(1).split(",")
+        val map = Map("mathscinet" -> ids.filter(_.startsWith("MR")), "arxiv" -> ids.filter(_.startsWith("arXiv:")))
+        store.put(pair(0), map)
       }
       db.commit
       println(" .. loaded index")
@@ -165,7 +167,7 @@ object Search {
 
   val cachedIndex = {
     val loader =
-      new CacheLoader[String, Option[Array[String]]]() {
+      new CacheLoader[String, Option[Map[String, Array[String]]]]() {
         override def load(key: String) = {
           index.get(key)
         }
@@ -177,10 +179,10 @@ object Search {
       .build(loader)
   }
 
-  def get(t: String, include_mathscinet: Boolean, include_arXiv: Boolean) = cachedIndex.getUnchecked(t).get.collect({
-    case id if id.startsWith("arXiv:") && include_arXiv => id
-    case id if id.startsWith("MR") && include_mathscinet => id
-  })
+  def get(t: String, identifierTypes: Array[String]): Array[String] = {
+    val map = cachedIndex.getUnchecked(t).get
+    identifierTypes.map(t => map(t)).flatten
+  }
 
   val idf = {
     val loader =
@@ -188,13 +190,17 @@ object Search {
         override def load(term: String) = {
           cachedIndex.getUnchecked(term) match {
             case None => None
-            case Some(documents: Array[String]) => {
-              val n = documents.length
-              val r = scala.math.log((N - n + 0.5) / (n + 0.5))
-              if (r < 0) {
+            case Some(documents: Map[String, Array[String]]) => {
+              val n = documents.values.map(_.length).sum
+              if (n == 0) {
                 None
               } else {
-                Some(r)
+                val r = scala.math.log((N - n + 0.5) / (n + 0.5))
+                if (r < 0) {
+                  None
+                } else {
+                  Some(r)
+                }
               }
             }
           }
@@ -239,44 +245,44 @@ object Search {
           }
         }
 
-        def loadArXiv(identifier:String) = {
+        def loadArXiv(identifier: String) = {
           ???
         }
-        
+
         def loadMathSciNet(identifier: Int) = {
           import scala.collection.JavaConverters._
           val result = citationStore.getOrElseUpdate("MR" + identifier,
-              (SQL {
-                (for (
-                    a <- TableQuery[MathscinetBIBTEX];
+            (SQL {
+              (for (
+                a <- TableQuery[MathscinetBIBTEX];
                 aux <- TableQuery[MathscinetAux];
                 if a.MRNumber === identifier;
-                if aux.MRNumber === identifier) yield 
-                (a.url,
-                    a.doi,
-                    aux.wikiTitle,
-                    aux.textAuthors,
-                    aux.textCitation, 
-                    aux.markdownCitation,
-                    aux.htmlCitation,
-                    aux.pdf, 
-                    aux.free)) }).headOption.map {
-                // TODO fill in other identifiers if available
-                case (url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) =>
-                  Citation(
-                    Some(identifier),
-                    None,
-                    None,
-                    title,
-                    authors,
-                    citation_text,
-                    citation_markdown,
-                    citation_html,
-                    doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier),
-                    check(pdf),
-                    check(free))
-              }
-            ).map(_.fix)
+                if aux.MRNumber === identifier
+              ) yield (a.url,
+                a.doi,
+                aux.wikiTitle,
+                aux.textAuthors,
+                aux.textCitation,
+                aux.markdownCitation,
+                aux.htmlCitation,
+                aux.pdf,
+                aux.free))
+            }).headOption.map {
+              // TODO fill in other identifiers if available
+              case (url, doi, title, authors, citation_text, citation_markdown, citation_html, pdf, free) =>
+                Citation(
+                  Some(identifier),
+                  None,
+                  None,
+                  title,
+                  authors,
+                  citation_text,
+                  citation_markdown,
+                  citation_html,
+                  doi.map("http://dx.doi.org/" + _).orElse(correctURL(url)).getOrElse("http://www.ams.org/mathscinet-getitem?mr=" + identifier),
+                  check(pdf),
+                  check(free))
+            }).map(_.fix)
           Future { db.commit }
           result
         }
@@ -300,7 +306,7 @@ object Search {
           }
 
           if (toLookupMathSciNet.nonEmpty) {
-            val records = SQL { 
+            val records = SQL {
               (for (a <- TableQuery[MathscinetBIBTEX]; if a.MRNumber.inSet(toLookupMathSciNet); aux <- TableQuery[MathscinetAux]; if a.MRNumber === aux.MRNumber) yield (a.MRNumber, a.url, a.doi, aux.wikiTitle, aux.textAuthors, aux.textCitation, aux.markdownCitation, aux.htmlCitation, aux.pdf, aux.free))
             }
 
@@ -350,14 +356,13 @@ object Search {
 
   private val N = {
     val s = scala.collection.mutable.Set[String]()
-    for ((_, v) <- index) {
+    for ((_, m) <- index; (_, v) <- m) {
       s ++= v
     }
     //    println(s"Counting index --- there are ${s.size} bibtex records")
     s.size
   }
 
- 
   private val queryCache = CacheBuilder.newBuilder()
     .maximumSize(2000)
     .expireAfterAccess(6, TimeUnit.HOURS)
@@ -368,7 +373,7 @@ object Search {
     })
 
   def query(searchString: String): Result = {
-    queryCache.getUnchecked(searchString)
+    queryCache.get(searchString)
   }
 
   def goodMatch(searchString: String) = {
@@ -378,12 +383,14 @@ object Search {
       matches.sliding(2).filter(p => p.size == 2 && p(0).score > 0.48 && scala.math.pow(p(0).score, 1.75) > p(1).score).toStream.headOption.map(_.head))
   }
 
-  private def _query(searchString: String, include_mathscinet: Boolean = true, include_arXiv: Boolean = false): Result = {
+  private def _query(searchString: String, identifierTypes: Array[String] = Array("mathscinet")): Result = {
     //    println(s"searchString = $searchString")
 
     val allTerms = Tokenize(searchString)
     val terms = allTerms.distinct
     lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
+
+    print("idfs: " + idfs)
 
     //    println(s"terms = $terms")
     //    println(s"idfs = $idfs")
@@ -391,10 +398,10 @@ object Search {
     val score: String => Double = {
       val cache = scala.collection.mutable.Map[String, Double]()
 
-//      implicit val tag = scala.reflect.classTag[String] 
-      
+      //      implicit val tag = scala.reflect.classTag[String] 
+
       def _score(d: String) = (for ((t, q) <- idfs) yield {
-        if (get(t, include_mathscinet, include_arXiv).has(d)) q else 0.0
+        if (get(t, identifierTypes).has(d)) q else 0.0
       }).sum
 
       { d: String =>
@@ -420,7 +427,7 @@ object Search {
     } else if (idfs.isEmpty) {
       Nil
     } else {
-      val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t, include_mathscinet, include_arXiv)) }).toStream
+      val sets = idfs.iterator.map({ case (t, q) => ((t, q), get(t, identifierTypes)) }).toStream
 
       val intersections = sets.tail.scanLeft(sets.head._2)(_ intersect _._2)
       //      for(i <- intersections) {
@@ -590,11 +597,11 @@ object Search {
 }
 
 object SQL {
-    val db = {
+  val db = {
     import slick.driver.MySQLDriver.api._
     Database.forURL("jdbc:mysql://mysql.tqft.net/mathematicsliteratureproject?user=mathscinetbot&password=zytopex", driver = "com.mysql.jdbc.Driver")
   }
-  
+
   def apply[R](x: slick.lifted.Rep[Int]) = Await.result(db.run(x.result), Duration.Inf)
   def apply[R](x: slick.lifted.Query[Any, R, Seq]): Seq[R] = Await.result(db.run(x.result), Duration.Inf)
   def stream[R](x: slick.lifted.Query[Any, R, Seq]): slick.backend.DatabasePublisher[R] = db.stream(x.result)
@@ -626,8 +633,6 @@ class ArxivAux(tag: Tag) extends Table[(String, String, String)](tag, "arxiv_aux
   def textAuthors = column[String]("textAuthors")
   def * = (arxivid, textTitle, textAuthors)
 }
-
-
 
 class MathscinetAux(tag: Tag) extends Table[(Int, String, String, String, String, String, String, Option[String], Option[String])](tag, "mathscinet_aux") {
   def MRNumber = column[Int]("MRNumber", O.PrimaryKey)

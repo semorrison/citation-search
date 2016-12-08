@@ -9,6 +9,9 @@ db.t
 terms
 terms.gz
 
+web.err
+web.out
+
 .cache-main
 .cache-tests
 

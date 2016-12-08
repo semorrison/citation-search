@@ -94,7 +94,7 @@ object PrepareCitationSearchIndex extends App {
     .closeOnJvmShutdown
     .make
 
-  val store = db.getHashMap[String, Array[String]]("terms")
+  val store = db.getHashMap[String, Map[String,Array[String]]]("terms")
 
   var count = 0
 
@@ -104,7 +104,9 @@ object PrepareCitationSearchIndex extends App {
     out.println(documents.toSeq.sorted.mkString(","))
     count += 1
     if (count % 1000 == 0) { println(s"Loaded $count terms"); db.commit }
-    store.put(term, documents.toSeq.sorted.toArray)
+    val ids = documents.toSeq.sorted.toArray
+    val map = Map("mathscinet" -> ids.filter(_.startsWith("MR")), "arxiv" -> ids.filter(_.startsWith("arXiv:")))
+    store.put(term, map)
   }
   out.close
 

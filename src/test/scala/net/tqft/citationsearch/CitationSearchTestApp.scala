@@ -13,6 +13,7 @@ object CitationSearchTestApp extends App {
 //  println(Search.query("On a tensor category for the exceptional Lie groups - Cohen, A.M. and de Man, R. ").asJson.spaces2)
 //  println(Search.query("Some indications that the exception groups form a series - Cohen, A. M.").asJson.spaces2)
   println(Search.query("Equations Différentielles à points singuliers réguliers deligne").asJson.spaces2)
+  println(Search.query("Joan Bagaria and Menachem Magidor, MR 3226024 On ω1-strongly compact cardinals, J. Symb. Log. 79 (2014), no. 1, 266--278.").asJson.spaces2)
   
 //    val s = "Subfactors with index at most 5, part 1: the odometer, morrison, snyder, cmp"
 //    for (q <- s.reverse.tails.toSeq.reverse.map(_.reverse)) {
