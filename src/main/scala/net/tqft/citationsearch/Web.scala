@@ -55,6 +55,9 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
     import scala.collection.JavaConverters._
     val callback = Option(parameters.get("callback")).map(_.asScala.headOption).flatten
     val query = Option(parameters.get("q")).map(_.asScala.headOption).flatten.getOrElse("")
+    
+    println("Received query: " + query)
+    
     val results = Search.query(query)
 
     response.setStatusCode(200)
