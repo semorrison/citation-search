@@ -27,7 +27,7 @@ object Web {
         .build(new ResolverService)
 
       println("Started citation-search.")
-
+      println("Memory allocated: " + (Runtime.getRuntime.maxMemory / 1024 / 1024).toInt)
     } catch {
       case e: Throwable => e.printStackTrace
     }
