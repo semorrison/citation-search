@@ -1,1 +1,2 @@
+export JAVA_OPTS=-Xmx1g
 target/start net.tqft.citationsearch.Web
