@@ -605,7 +605,7 @@ object SQL {
   def apply[R](x: slick.lifted.Rep[Int]) = Await.result(db.run(x.result), Duration.Inf)
   def apply[R](x: slick.lifted.Query[Any, R, Seq]): Seq[R] = Await.result(db.run(x.result), Duration.Inf)
   def stream[R](x: slick.lifted.Query[Any, R, Seq]): slick.backend.DatabasePublisher[R] = db.stream(x.result)
-  def apply[R, S <: NoStream, E <: Effect](x: slick.profile.SqlAction[R, S, E]): R = Await.result(db.run(x), Duration.Inf)
+  def apply[R, S <: NoStream, E <: Effect](x: slick.sql.SqlAction[R, S, E]): R = Await.result(db.run(x), Duration.Inf)
 }
 
 class Arxiv(tag: Tag) extends Table[(String, Date, Option[Date], String, String, String, Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], Option[String], String)](tag, "arxiv") {
