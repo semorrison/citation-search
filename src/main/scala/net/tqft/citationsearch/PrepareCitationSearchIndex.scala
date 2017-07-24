@@ -11,7 +11,7 @@ import java.nio.file.Paths
 import org.apache.commons.lang3.StringEscapeUtils
 
 object PrepareCitationSearchIndex extends App {
-  import slick.driver.MySQLDriver.api._
+  import slick.jdbc.MySQLProfile.api._
 
   // Make sure to run SQLAuxApp first
 
@@ -38,16 +38,16 @@ object PrepareCitationSearchIndex extends App {
 
   def arXivPage(k: Int): Seq[(String, String)] = {
     try {
-    println("retrieving page " + k)
-    (SQL {
-      (for (
-        a <- TableQuery[Arxiv];
-        p <- TableQuery[ArxivAux];
-        if p.arxivid === a.arxivid
-      ) yield {
-        (a.arxivid, p.textTitle ++ " - " ++ p.textAuthors ++ " - " ++ a.journalref.getOrElse("") ++ " " ++ a.doi.getOrElse(""))
-      }).drop(k * step).take(step)
-    })
+      println("retrieving page " + k)
+      (SQL {
+        (for (
+          a <- TableQuery[Arxiv];
+          p <- TableQuery[ArxivAux];
+          if p.arxivid === a.arxivid
+        ) yield {
+          (a.arxivid, p.textTitle ++ " - " ++ p.textAuthors ++ " - " ++ a.journalref.getOrElse("") ++ " " ++ a.doi.getOrElse(""))
+        }).drop(k * step).take(step)
+      })
     } catch {
       case e: Exception => {
         e.printStackTrace
@@ -94,7 +94,7 @@ object PrepareCitationSearchIndex extends App {
     .closeOnJvmShutdown
     .make
 
-  val store = db.getHashMap[String, Map[String,Array[String]]]("terms")
+  val store = db.getHashMap[String, Map[String, Array[String]]]("terms")
 
   var count = 0
 

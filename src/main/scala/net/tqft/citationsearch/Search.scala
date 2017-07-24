@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import com.google.common.cache.LoadingCache
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -219,8 +219,8 @@ object Search {
     def check(o: Option[String]) = {
       o match {
         case Some("-") => None
-        case Some("") => None
-        case o => o
+        case Some("")  => None
+        case o         => o
       }
     }
 
@@ -438,7 +438,7 @@ object Search {
 
       val j = intersections.indexWhere(_.isEmpty) match {
         case -1 => intersections.size
-        case j => j
+        case j  => j
       }
 
       val qsum = idfs.drop(j).map(_._2).sum
@@ -598,13 +598,13 @@ object Search {
 
 object SQL {
   val db = {
-    import slick.driver.MySQLDriver.api._
+    import slick.jdbc.MySQLProfile.api._
     Database.forURL("jdbc:mysql://mysql.tqft.net/mathematicsliteratureproject?user=mathscinetbot&password=zytopex", driver = "com.mysql.jdbc.Driver")
   }
 
   def apply[R](x: slick.lifted.Rep[Int]) = Await.result(db.run(x.result), Duration.Inf)
   def apply[R](x: slick.lifted.Query[Any, R, Seq]): Seq[R] = Await.result(db.run(x.result), Duration.Inf)
-  def stream[R](x: slick.lifted.Query[Any, R, Seq]): slick.backend.DatabasePublisher[R] = db.stream(x.result)
+  def stream[R](x: slick.lifted.Query[Any, R, Seq]): slick.basic.DatabasePublisher[R] = db.stream(x.result)
   def apply[R, S <: NoStream, E <: Effect](x: slick.sql.SqlAction[R, S, E]): R = Await.result(db.run(x), Duration.Inf)
 }
 
@@ -689,7 +689,7 @@ object MRIdentifier {
     if (s.toLowerCase.startsWith("mr")) {
       s.drop(2) match {
         case Int(id) => Some(id)
-        case _ => None
+        case _       => None
       }
     } else {
       None
