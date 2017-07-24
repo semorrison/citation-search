@@ -191,11 +191,14 @@ object Search {
           cachedIndex.getUnchecked(term) match {
             case None => None
             case Some(documents: Map[String, Array[String]]) => {
+              println("term: " + term)
               val n = documents.values.map(_.length).sum
+              println(documents.values.map(_.length))
               if (n == 0) {
                 None
               } else {
                 val r = scala.math.log((N - n + 0.5) / (n + 0.5))
+                println(r)
                 if (r < 0) {
                   None
                 } else {
@@ -384,10 +387,12 @@ object Search {
   }
 
   private def _query(searchString: String, identifierTypes: Array[String] = Array("mathscinet")): Result = {
-    //    println(s"searchString = $searchString")
+        println(s"searchString = $searchString")
 
     val allTerms = Tokenize(searchString)
     val terms = allTerms.distinct
+    println("terms: " + terms)
+    
     lazy val idfs: Seq[(String, Double)] = terms.map(t => t -> idf.getUnchecked(t)).collect({ case (t, Some(q)) => (t, q) }).sortBy(p => -p._2)
 
     print("idfs: " + idfs)

@@ -99,7 +99,7 @@ object PrepareCitationSearchIndex extends App {
   var count = 0
 
   val out = new PrintStream(new GZIPOutputStream(new FileOutputStream(termsFile)))
-  for ((term, documents) <- index) {
+  for ((term, documents) <- index; if term.size > 1) {
     out.println(term)
     out.println(documents.toSeq.sorted.mkString(","))
     count += 1
