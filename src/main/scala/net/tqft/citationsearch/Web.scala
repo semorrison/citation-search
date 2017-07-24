@@ -1,11 +1,11 @@
 package net.tqft.citationsearch
 
 import org.jboss.netty.handler.codec.http.{ HttpRequest, HttpResponse }
-import com.twitter.finagle.builder.ServerBuilder
-import com.twitter.finagle.http.{ Http, Response }
-import com.twitter.finagle.Service
-import com.twitter.util.Future
-import java.net.InetSocketAddress
+
+import com.twitter.finagle.{ Http, Service }
+import com.twitter.finagle.http
+import com.twitter.util.{ Await, Future }
+
 import util.Properties
 import java.net.URI
 import org.jboss.netty.handler.codec.http.QueryStringDecoder
@@ -20,11 +20,14 @@ object Web {
     try {
       println("Starting on port: " + port)
 
-      ServerBuilder()
-        .codec(Http())
-        .name("citationsearch")
-        .bindTo(new InetSocketAddress(port))
-        .build(new ResolverService)
+      //      ServerBuilder()
+      //        .codec(Http())
+      //        .name("citationsearch")
+      //        .bindTo(new InetSocketAddress(port))
+      //        .build()
+
+      val server = Http.serve(":" + port, new ResolverService)
+      Await.ready(server)
 
       println("Started citation-search.")
       println("Memory allocated: " + (Runtime.getRuntime.maxMemory / 1024 / 1024).toInt)
@@ -43,21 +46,21 @@ object Throttle {
   lastQuery = System.currentTimeMillis()
 }
 
-class ResolverService extends Service[HttpRequest, HttpResponse] {
+class ResolverService extends Service[http.Request, http.Response] {
   //  Future(Search.query("warming up ..."))
 
-//  Throttle()
-  
-  def apply(req: HttpRequest): Future[HttpResponse] = {
-    val response = Response()
+  //  Throttle()
 
-    val parameters = new QueryStringDecoder(req.getUri()).getParameters
+  def apply(req: http.Request): Future[http.Response] = {
+    val response = http.Response()
+
+    val parameters = new QueryStringDecoder(req.uri).getParameters
     import scala.collection.JavaConverters._
     val callback = Option(parameters.get("callback")).map(_.asScala.headOption).flatten
     val query = Option(parameters.get("q")).map(_.asScala.headOption).flatten.getOrElse("")
-    
+
     println("Received query: " + query)
-    
+
     val results = Search.query(query)
 
     response.setStatusCode(200)
@@ -81,7 +84,7 @@ class ResolverService extends Service[HttpRequest, HttpResponse] {
         response.contentString = c + "(" + json + ");"
       }
       case None => {
-        response.headers.set("Access-Control-Allow-Origin", "*")        
+        response.headerMap.add("Access-Control-Allow-Origin", "*")
         response.setContentType("application/json")
         response.contentString = json
       }
